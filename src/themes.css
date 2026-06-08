@@ -1,0 +1,124 @@
+/* ================================================================
+   五套美术主题
+   切换方式: <html data-theme="warm">
+   ================================================================ */
+
+/* 默认: 暖茶 Warm Tea */
+:root, [data-theme="warm"] {
+  --bg: #f7f3f0;
+  --bg2: #f0ebe6;
+  --card: #ffffff;
+  --side: #faf7f5;
+  --hover: #ede6df;
+  --active: #e8ddd4;
+  --text: #4d3b30;
+  --text2: #7a685b;
+  --text3: #b0a095;
+  --pink: #c47a5a;
+  --pink2: #d9a58b;
+  --pink3: #eed5c5;
+  --mint: #c8e0cc;
+  --mint2: #e4f2e6;
+  --yellow: #faf0d8;
+  --border: #e0d5c8;
+  --shadow: 0 2px 10px rgba(140,110,80,.08);
+  --shadow2: 0 4px 18px rgba(140,110,80,.12);
+  --shadow3: 0 8px 32px rgba(140,110,80,.16);
+}
+
+/* 墨砚 Ink */
+[data-theme="ink"] {
+  --bg: #1e1e22;
+  --bg2: #26262b;
+  --card: #2d2d33;
+  --side: #25252a;
+  --hover: #33333a;
+  --active: #3a3a42;
+  --text: #d4d4d8;
+  --text2: #a0a0a8;
+  --text3: #6a6a72;
+  --pink: #8b9dc3;
+  --pink2: #6d80a8;
+  --pink3: #3a4560;
+  --mint: #3d5a48;
+  --mint2: #2a3d32;
+  --yellow: #4a4530;
+  --border: #3e3e46;
+  --shadow: 0 2px 10px rgba(0,0,0,.3);
+  --shadow2: 0 4px 18px rgba(0,0,0,.4);
+  --shadow3: 0 8px 32px rgba(0,0,0,.5);
+}
+
+/* 樱花 Sakura */
+[data-theme="sakura"] {
+  --bg: #fef8fa;
+  --bg2: #fdf0f4;
+  --card: #ffffff;
+  --side: #fff5f7;
+  --hover: #ffe8ef;
+  --active: #ffd4e2;
+  --text: #5c3d4e;
+  --text2: #8b6a7a;
+  --text3: #c4a0b0;
+  --pink: #e8829e;
+  --pink2: #f0a8bc;
+  --pink3: #fdd4e0;
+  --mint: #d8e8d8;
+  --mint2: #eaf5ea;
+  --yellow: #fdf0e0;
+  --border: #f2d0dc;
+  --shadow: 0 2px 10px rgba(200,140,160,.1);
+  --shadow2: 0 4px 18px rgba(200,140,160,.16);
+  --shadow3: 0 8px 32px rgba(200,140,160,.22);
+}
+
+/* 森林 Forest */
+[data-theme="forest"] {
+  --bg: #f4f7f2;
+  --bg2: #edf2ea;
+  --card: #ffffff;
+  --side: #f8faf6;
+  --hover: #e4efe0;
+  --active: #d4e8ce;
+  --text: #3d4d38;
+  --text2: #6b7a65;
+  --text3: #a0b098;
+  --pink: #6b9e6b;
+  --pink2: #8cba8c;
+  --pink3: #d0e8d0;
+  --mint: #b8d8b8;
+  --mint2: #daf0da;
+  --yellow: #f2f0d0;
+  --border: #d8e8d2;
+  --shadow: 0 2px 10px rgba(100,140,90,.08);
+  --shadow2: 0 4px 18px rgba(100,140,90,.12);
+  --shadow3: 0 8px 32px rgba(100,140,90,.16);
+}
+
+/* 海洋 Ocean */
+[data-theme="ocean"] {
+  --bg: #f4f7fa;
+  --bg2: #edf2f7;
+  --card: #ffffff;
+  --side: #f7f9fb;
+  --hover: #e4edf5;
+  --active: #d0dff0;
+  --text: #3a4d5e;
+  --text2: #6a7d8e;
+  --text3: #a0b0c0;
+  --pink: #5b8fbf;
+  --pink2: #80b0d8;
+  --pink3: #d0e4f5;
+  --mint: #c0dce8;
+  --mint2: #e0f0f8;
+  --yellow: #f0f0e8;
+  --border: #d0dde8;
+  --shadow: 0 2px 10px rgba(100,140,180,.08);
+  --shadow2: 0 4px 18px rgba(100,140,180,.12);
+  --shadow3: 0 8px 32px rgba(100,140,180,.16);
+}
+
+/* 全局元素跟随主题 */
+body { background: var(--bg); color: var(--text); }
+.navbar { background: linear-gradient(180deg, var(--side), var(--bg2)); }
+.main-content { background: var(--bg); }
