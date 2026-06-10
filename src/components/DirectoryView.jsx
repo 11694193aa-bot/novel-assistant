@@ -2,16 +2,20 @@ import React, { useState, useRef } from 'react';
 import useStore from '../store';
 import ChapterEditor from './ChapterEditor';
 import FloatingWindow from './FloatingWindow';
+import Icon, { getBookCat, BookCoverImg } from './Icon';
 export default function DirectoryView({ selectedBookId, selectedChapterId, onSelectBook, onSelectChapter, onCalendarClick }) {
-  const { books, addBook, deleteBook, renameBook, addChapter, deleteChapter, renameChapter } = useStore();
+  const { books, addBook, deleteBook, renameBook, addChapter, deleteChapter, renameChapter, setBookCover, reorderChapters } = useStore();
   const [expandedBooks, setExpandedBooks] = useState({});
   const [expandedChapters, setExpandedChapters] = useState({});
   const [editingBookId, setEditingBookId] = useState(null);
   const [editingChapterId, setEditingChapterId] = useState(null);
-  const [newBookTitle, setNewBookTitle] = useState('');
-  const [showAddBook, setShowAddBook] = useState(false);
   const [floatingWindow, setFloatingWindow] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [selectedChapters, setSelectedChapters] = useState(new Set());
+  const [bookBatchMode, setBookBatchMode] = useState(false);
+  const [selectedBooks, setSelectedBooks] = useState(new Set());
+  const [dragId, setDragId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
   const chapterRefs = useRef({});
 
   const book = books.find(b => b.id === selectedBookId);
@@ -28,12 +32,9 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
   };
 
   const handleAddBook = () => {
-    if (newBookTitle.trim()) {
-      const b = addBook(newBookTitle.trim());
-      setNewBookTitle(''); setShowAddBook(false);
-      setExpandedBooks(prev => ({ ...prev, [b.id]: true }));
-      onSelectBook(b.id);
-    }
+    const b = addBook('新书籍');
+    setExpandedBooks(prev => ({ ...prev, [b.id]: true }));
+    onSelectBook(b.id);
   };
 
   const handleAddChapter = (targetBookId, parentId = null) => {
@@ -59,7 +60,23 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
           <div key={ch.id} style={{ paddingLeft: 4 + depth * 16 }}>
             <div
               ref={el => chapterRefs.current[ch.id] = el}
-              className={`dir-chapter-row ${selectedChapterId === ch.id ? 'active' : ''}`}
+              className={`dir-chapter-row ${selectedChapterId === ch.id ? 'active' : ''} ${dragOverId === ch.id ? 'drag-over' : ''}`}
+              draggable
+              onDragStart={(e) => { e.dataTransfer.setData('text/plain', ch.id); setDragId(ch.id); }}
+              onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+              onDragOver={(e) => { e.preventDefault(); setDragOverId(ch.id); }}
+              onDragLeave={() => setDragOverId(null)}
+              onDrop={(e) => {
+                e.preventDefault(); setDragOverId(null);
+                const fromId = e.dataTransfer.getData('text/plain');
+                if (fromId === ch.id) return;
+                const ordered = chapters.filter(c => !c.parentId).sort((a,b) => a.order - b.order).map(c => c.id);
+                const fromIdx = ordered.indexOf(fromId);
+                const toIdx = ordered.indexOf(ch.id);
+                ordered.splice(fromIdx, 1);
+                ordered.splice(toIdx, 0, fromId);
+                reorderChapters(selectedBookId, ordered);
+              }}
               onClick={() => onSelectChapter(ch.id)}
               onContextMenu={(e) => {
                 e.preventDefault(); e.stopPropagation();
@@ -72,6 +89,15 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
                 });
               }}
             >
+              <input type="checkbox" className="card-check" style={{width:14,height:14,flexShrink:0}}
+                checked={selectedChapters.has(ch.id)}
+                onChange={e => { e.stopPropagation();
+                  const next = new Set(selectedChapters);
+                  e.target.checked ? next.add(ch.id) : next.delete(ch.id);
+                  setSelectedChapters(next);
+                }}
+                onClick={e => e.stopPropagation()}
+              />
               <span className="dir-expand-icon" onClick={(e) => { e.stopPropagation(); toggleChapter(ch.id); }}>
                 {hasKids ? (isExpanded ? '▼' : '▶') : '　'}
               </span>
@@ -106,21 +132,32 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
           <span style={{fontSize:14}}>📚</span>
           <span>书籍</span>
           <div className="sidebar-header-actions">
-            <button className="btn-icon" onClick={() => { setShowAddBook(true); setNewBookTitle(''); }} title="新建">+</button>
+            <button className="btn-icon" onClick={handleAddBook} title="新建书籍">+</button>
+            <button className={`btn-icon ${bookBatchMode ? 'active' : ''}`} onClick={() => { setBookBatchMode(!bookBatchMode); setSelectedBooks(new Set()); }} title="批量管理">
+              ☰
+            </button>
             <button className="btn-icon" onClick={() => setCollapsed(!collapsed)} title={collapsed ? '展开' : '收起'}>
               {collapsed ? '▶' : '◀'}
             </button>
           </div>
         </div>
 
-        {showAddBook && (
-          <div className="dir-add-form">
-            <input placeholder="书名..." value={newBookTitle} onChange={e => setNewBookTitle(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddBook()} autoFocus />
-            <div className="dir-add-actions">
-              <button onClick={handleAddBook}>✓</button>
-              <button onClick={() => { setShowAddBook(false); setNewBookTitle(''); }}>✕</button>
-            </div>
+        {/* 书籍批量操作栏 */}
+        {bookBatchMode && (
+          <div className="batch-bar" style={{padding:'4px 10px',borderBottom:'1px solid var(--border)'}}>
+            <button className="tb-btn" onClick={() => {
+              if (selectedBooks.size === books.length) setSelectedBooks(new Set());
+              else setSelectedBooks(new Set(books.map(b => b.id)));
+            }}>{selectedBooks.size === books.length ? '取消全选' : '☑ 全选'}</button>
+            {selectedBooks.size > 0 && (
+              <button className="tb-btn" style={{color:'#d44'}} onClick={() => {
+                if (confirm(`删除选中的 ${selectedBooks.size} 本书？\n（书籍及其中所有章节将永久删除）`)) {
+                  selectedBooks.forEach(id => { deleteBook(id); if (selectedBookId === id) { onSelectBook(null); onSelectChapter(null); } });
+                  setSelectedBooks(new Set());
+                }
+              }}>🗑 删除 ({selectedBooks.size})</button>
+            )}
+            <span className="tb-info">已选 {selectedBooks.size}/{books.length}</span>
           </div>
         )}
 
@@ -128,8 +165,11 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
           <div key={b.id} className="dir-book-group">
             <div
               className={`dir-book-item ${selectedBookId === b.id ? 'active' : ''} ${expandedBooks[b.id] ? 'expanded' : ''}`}
-              onClick={() => toggleBook(b.id)}
+              onClick={() => { if (bookBatchMode) { setSelectedBooks(prev => { const next = new Set(prev); if (next.has(b.id)) next.delete(b.id); else next.add(b.id); return next; }); } else toggleBook(b.id); }}
             >
+              {bookBatchMode && (
+                <input type="checkbox" className="card-check" checked={selectedBooks.has(b.id)} readOnly style={{marginRight:4}} />
+              )}
               <span className="dir-expand-icon">{expandedBooks[b.id] ? '▼' : '▶'}</span>
               {editingBookId === b.id ? (
                 <input className="dir-inline-edit" defaultValue={b.title}
@@ -137,7 +177,21 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
                   onKeyDown={(e) => { if (e.key === 'Enter') { renameBook(b.id, e.target.value || b.title); setEditingBookId(null); }}}
                   autoFocus onClick={e => e.stopPropagation()} />
               ) : (
-                <span className="dir-book-title" onDoubleClick={() => setEditingBookId(b.id)}>📘 {b.title}</span>
+                <span className="dir-book-title" onDoubleClick={() => setEditingBookId(b.id)}>
+                  <span className="dir-book-cover" onClick={e => { e.stopPropagation(); document.getElementById(`cover-input-${b.id}`)?.click(); }} title="点击更换封面">
+                    <BookCoverImg bookId={b.id} cover={b.cover} size={26} />
+                  </span>
+                  {b.title}
+                  <button className="dir-btn" style={{marginLeft:4}} onClick={e => { e.stopPropagation(); setEditingBookId(b.id); }} title="改名">✏️</button>
+                  <input id={`cover-input-${b.id}`} type="file" accept="image/*" style={{display:'none'}}
+                    onChange={e => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => setBookCover(b.id, reader.result);
+                      reader.readAsDataURL(file);
+                    }} />
+                </span>
               )}
               <span className="dir-book-count">{(b.chapters || []).length}</span>
               <button className="dir-btn dir-btn-del" title="删除" onClick={(e) => { e.stopPropagation(); if (confirm(`删除"${b.title}"？`)) { deleteBook(b.id); if (selectedBookId === b.id) { onSelectBook(null); onSelectChapter(null); }}}}>×</button>
@@ -148,6 +202,22 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
                 {b === book && (
                   <div className="dir-chapter-toolbar">
                     <button className="btn-add-chapter-sm" onClick={() => handleAddChapter(b.id)}>+ 新章节</button>
+                    {chapters.length > 0 && (
+                      <>
+                        <button className="btn-add-chapter-sm" style={{marginLeft:4}} onClick={() => {
+                          if (selectedChapters.size === chapters.length) setSelectedChapters(new Set());
+                          else setSelectedChapters(new Set(chapters.map(c => c.id)));
+                        }}>{selectedChapters.size === chapters.length ? '取消全选' : '全选章节'}</button>
+                        {selectedChapters.size > 0 && (
+                          <button className="btn-add-chapter-sm" style={{marginLeft:4,color:'#d44'}} onClick={() => {
+                            if (confirm(`删除 ${selectedChapters.size} 个章节？`)) {
+                              selectedChapters.forEach(id => deleteChapter(b.id, id));
+                              setSelectedChapters(new Set());
+                            }
+                          }}>删除选中({selectedChapters.size})</button>
+                        )}
+                      </>
+                    )}
                   </div>
                 )}
                 {b === book && renderChapterTree()}

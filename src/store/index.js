@@ -13,6 +13,7 @@ const defaultSettings = {
   fontFamily: 'font1',
   fontSize: 16,
   fontColor: '#4a3728',
+  fontOpacity: 0.92,
   windowOpacity: 0.9,
   autoSaveInterval: 5000,
   maxHistory: 20,

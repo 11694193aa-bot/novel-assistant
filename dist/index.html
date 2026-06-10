@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#c47a5a" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="icon" type="image/png" href="./app-icon.png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="./app-icon.png" sizes="192x192" />
+    <title>📝 小说创作助手</title>
+    <style>
+      /* 骨架屏 — 秒开，零 CLS */
+      html,body,#root{margin:0;padding:0;height:100%;overflow:hidden;background:#f7f3f0}
+      .skeleton{display:flex;height:100%}
+      .sk-nav{width:180px;min-width:180px;background:linear-gradient(180deg,#fff8f9,#ffeef2);display:flex;flex-direction:column;padding:12px 7px;gap:8px}
+      .sk-nav-item{height:36px;background:rgba(0,0,0,.04);border-radius:12px}
+      .sk-nav-brand{height:44px;background:rgba(0,0,0,.06);border-radius:12px;margin-bottom:6px}
+      .sk-main{flex:1;display:flex;background:transparent;align-items:center;justify-content:center}
+      .sk-loader{color:transparent}
+      @media(max-width:768px){
+        .sk-nav{display:none}
+        .sk-main{background:#faf7f5}
+      }
+    </style>
+    <script type="module" crossorigin src="./assets/index-_gOFbblC.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CaSzemWW.css">
+  </head>
+  <body>
+    <div id="root">
+      <div class="skeleton" id="skeleton">
+        <div class="sk-nav">
+          <div class="sk-nav-brand"></div>
+          <div class="sk-nav-item"></div><div class="sk-nav-item"></div>
+          <div class="sk-nav-item"></div><div class="sk-nav-item"></div>
+          <div style="flex:1"></div>
+          <div class="sk-nav-item"></div>
+        </div>
+        <div class="sk-main"></div>
+      </div>
+    </div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      }
+      window.addEventListener('load', function(){
+        var s = document.getElementById('skeleton');
+        if (s) { s.style.opacity = '0'; s.style.transition = 'opacity .3s';
+          setTimeout(function(){ if(s.parentNode)s.parentNode.removeChild(s); }, 400); }
+      });
+      window.onerror = function(_, __, ___, ____, err) {
+        var r = document.getElementById('root');
+        if (r) r.innerHTML = '<div style="font-family:sans-serif;padding:20px;color:#c44;text-align:center"><h3>发生错误</h3><pre style="font-size:11px;white-space:pre-wrap;text-align:left">' + ((err&&err.stack)||(err&&err.message)||'未知错误') + '</pre></div>';
+      };
+      window.addEventListener('unhandledrejection', function(e) {
+        var r = document.getElementById('root');
+        if (r) r.innerHTML = '<div style="font-family:sans-serif;padding:20px;color:#c44;text-align:center"><h3>Promise 错误</h3><pre style="font-size:11px;white-space:pre-wrap;text-align:left">' + ((e.reason&&e.reason.stack)||(e.reason&&e.reason.message)||e.reason||'未知') + '</pre></div>';
+      });
+    </script>
+  </body>
+</html>

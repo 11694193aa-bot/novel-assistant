@@ -48,7 +48,7 @@ async function main() {
   for (const [remote, local] of files) {
     const content = fs.readFileSync(local);
     const r = await request('PUT', remote, content);
-    console.log(r.status === 201 || r.status === 200 ? 'OK' : 'FAIL', remote);
+    console.log((r.status === 201 || r.status === 200 || r.status === 204 ? 'OK' : 'FAIL'), remote, `(status:${r.status})`);
   }
 
   console.log('\nDONE! Open: https://dav.jianguoyun.com/dav/novel-app/index.html');

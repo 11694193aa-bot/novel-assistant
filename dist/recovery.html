@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>数据恢复</title>
+<style>
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#f7f3f0;color:#4d3b30;padding:20px;max-width:700px;margin:0 auto}
+h1{font-size:20px;margin-bottom:4px}
+p.hint{color:#999;font-size:13px;margin-bottom:20px}
+.item{background:#fff;border-radius:16px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.05);flex-wrap:wrap}
+.item .time{font-weight:700;font-size:14px;min-width:130px}
+.item .info{flex:1;font-size:12px;color:#888}
+.item button{padding:8px 16px;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-size:13px;font-family:inherit}
+.item .restore{background:#c47a5a;color:#fff}
+.item .restore:hover{background:#a86548}
+.item .dl{background:#4caf7c;color:#fff}
+#status{margin-top:16px;padding:12px;border-radius:12px;font-weight:600;text-align:center;font-size:14px}
+.success{background:#d4edda;color:#155724}
+.loading{color:#888}
+.err{background:#ffe0e0;color:#a44}
+</style>
+</head>
+<body>
+<h1>📜 数据恢复</h1>
+<p class="hint">扫描 localStorage 历史版本 + IndexedDB 主数据。找到后可直接恢复或下载备份。</p>
+<div id="list"></div>
+<div id="status"></div>
+
+<script>
+const LS_KEY = 'novel_history_novel_app_data';
+const IDB_KEYS = ['novel_novel_app_data', 'novel_app_data'];
+let foundItems = [];
+
+function status(msg, cls) {
+  document.getElementById('status').textContent = msg;
+  document.getElementById('status').className = cls || '';
+}
+
+function addItem(label, info, data, source) {
+  foundItems.push({label, info, data, source});
+  const div = document.createElement('div');
+  div.className = 'item';
+  div.innerHTML = `
+    <span class="time">${label}</span>
+    <span class="info">${info} <small style="color:#aaa">[${source}]</small></span>
+    <button class="dl" onclick="downloadData(${foundItems.length-1})">📥 下载</button>
+    <button class="restore" onclick="restoreData(${foundItems.length-1})">↩ 恢复</button>
+  `;
+  document.getElementById('list').appendChild(div);
+}
+
+// ====== 扫描 localStorage 历史版本 ======
+try {
+  const keys = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+  if (keys.length > 0) {
+    for (const ts of keys) {
+      try {
+        const raw = localStorage.getItem(`${LS_KEY}_${ts}`);
+        if (!raw) continue;
+        const d = JSON.parse(raw);
+        if (!d || !d.books) continue;
+        const bCount = d.books.length;
+        const chCount = d.books.reduce((s,b) => s + (b.chapters||[]).length, 0);
+        const icCount = (d.inspirationCards||[]).length;
+        const date = new Date(+ts).toLocaleString('zh-CN');
+        addItem(date, `📚 ${bCount}书 · ${chCount}章 · 💡 ${icCount}灵感`, d, 'localStorage 历史');
+      } catch(_) {}
+    }
+    status(`localStorage 找到 ${keys.length} 个历史版本`, 'success');
+  }
+} catch(_) {}
+
+// ====== 扫描 IndexedDB ======
+(async function(){
+  status(document.getElementById('list').children.length > 0 ? '继续扫描 IndexedDB...' : '扫描 IndexedDB...', 'loading');
+  for (const key of IDB_KEYS) {
+    try {
+      await new Promise((resolve) => {
+        const r = indexedDB.open('novel_app_db', 1);
+        r.onsuccess = (e) => {
+          const db = e.target.result;
+          try {
+            const tx = db.transaction('store','readonly');
+            const req = tx.objectStore('store').get(key);
+            req.onsuccess = (res) => {
+              const d = res.target.result;
+              if (d && d.books && d.books.length > 0) {
+                const bCount = d.books.length;
+                const chCount = d.books.reduce((s,b) => s + (b.chapters||[]).length, 0);
+                const icCount = (d.inspirationCards||[]).length;
+                addItem('IndexedDB 主数据', `📚 ${bCount}书 · ${chCount}章 · 💡 ${icCount}灵感`, d, 'IndexedDB');
+              }
+              db.close();
+              resolve();
+            };
+            req.onerror = () => { db.close(); resolve(); };
+          } catch(_) { db.close(); resolve(); }
+        };
+        r.onerror = () => resolve();
+        r.onupgradeneeded = () => resolve();
+      });
+    } catch(_) {}
+  }
+
+  // 也扫 IndexedDB 里的历史版本
+  try {
+    const keys = [];
+    await new Promise((resolve) => {
+      const r = indexedDB.open('novel_app_db', 1);
+      r.onsuccess = (e) => {
+        const db = e.target.result;
+        try {
+          const tx = db.transaction('store','readonly');
+          const req = tx.objectStore('store').getAllKeys();
+          req.onsuccess = (res) => {
+            (res.target.result||[]).forEach(k => {
+              if (typeof k === 'string' && k.includes('history')) keys.push(k);
+            });
+            db.close();
+            resolve();
+          };
+          req.onerror = () => { db.close(); resolve(); };
+        } catch(_) { db.close(); resolve(); }
+      };
+      r.onerror = () => resolve();
+    });
+    for (const k of keys) {
+      await new Promise((resolve) => {
+        const r = indexedDB.open('novel_app_db', 1);
+        r.onsuccess = (e) => {
+          const db = e.target.result;
+          try {
+            const tx = db.transaction('store','readonly');
+            const req = tx.objectStore('store').get(k);
+            req.onsuccess = (res) => {
+              const d = res.target.result;
+              if (d && d.books && d.books.length > 0) {
+                addItem(k.replace('novel_history_novel_app_data_',''), `📚 ${d.books.length}书`, d, 'IndexedDB 历史');
+              }
+              db.close();
+              resolve();
+            };
+            req.onerror = () => { db.close(); resolve(); };
+          } catch(_) { db.close(); resolve(); }
+        };
+        r.onerror = () => resolve();
+      });
+    }
+  } catch(_) {}
+
+  // ====== 扫描 localStorage 主数据 ======
+  try {
+    for (const k of ['novel_novel_app_data', 'novel_app_data']) {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const d = JSON.parse(raw);
+      if (d && d.books && d.books.length > 0) {
+        const bCount = d.books.length;
+        const chCount = d.books.reduce((s,b) => s + (b.chapters||[]).length, 0);
+        addItem('localStorage 主数据', `📚 ${bCount}书 · ${chCount}章`, d, 'localStorage');
+      }
+    }
+  } catch(_) {}
+
+  if (foundItems.length === 0) {
+    status('❌ 没有找到任何数据。IndexedDB 和 localStorage 均已清空。', 'err');
+  } else {
+    status(`✅ 找到 ${foundItems.length} 条记录！选最早的版本恢复或下载。`, 'success');
+  }
+})();
+
+window.downloadData = function(idx) {
+  const item = foundItems[idx];
+  if (!item) return;
+  const d = JSON.parse(JSON.stringify(item.data));
+  if (d.settings?.splashImage) delete d.settings.splashImage;
+  const blob = new Blob([JSON.stringify(d,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `小说助手恢复_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  status('✅ 备份文件已下载！','success');
+};
+
+window.restoreData = function(idx) {
+  const item = foundItems[idx];
+  if (!item) return;
+  if (!confirm(`确定恢复「${item.label}」？\n\n${item.info}\n\n⚠️ 当前数据将被覆盖。`)) return;
+  const d = item.data;
+  const full = {
+    books: d.books || [],
+    inspirationCards: d.inspirationCards || [],
+    aiConversations: d.aiConversations || [],
+    settings: d.settings || {},
+    dailyCounts: d.dailyCounts || {},
+    trash: d.trash || [],
+    _updatedAt: Date.now(),
+  };
+  // 同时写入 localStorage 和 IndexedDB
+  localStorage.setItem('novel_novel_app_data', JSON.stringify(full));
+  try {
+    const r = indexedDB.open('novel_app_db', 1);
+    r.onsuccess = (e) => {
+      const db = e.target.result;
+      const tx = db.transaction('store','readwrite');
+      tx.objectStore('store').put(full, 'novel_novel_app_data');
+      tx.oncomplete = () => { db.close(); status('✅ 恢复完成！刷新主页 (Ctrl+R) 即可看到数据。','success'); };
+      tx.onerror = () => { db.close(); status('⚠️ IndexedDB 写入失败，但 localStorage 已写。请刷新主页。','err'); };
+    };
+    r.onerror = () => { status('⚠️ 无法打开 IndexedDB。localStorage 已写，刷新主页试试。','err'); };
+  } catch(_) {
+    status('⚠️ IndexedDB 失败。localStorage 已写入，刷新主页试试。','err');
+  }
+};
+</script>
+</body>
+</html>

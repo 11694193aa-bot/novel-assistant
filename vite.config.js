@@ -5,6 +5,6 @@ import syncPlugin from './server-sync';
 export default defineConfig({
   plugins: [react(), syncPlugin()],
   base: './',
-  build: { outDir: 'dist' },
+  build: { outDir: 'dist', target: 'es2017' },
   server: { port: 5173, allowedHosts: ['localhost', '.loca.lt'] },
 });

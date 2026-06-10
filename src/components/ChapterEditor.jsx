@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import useStore from '../store';
-import mammoth from 'mammoth';
 
 const INDENT = '　　';
 
@@ -18,8 +17,9 @@ export default function ChapterEditor({ bookId, chapter, books, onCalendarClick 
   const [currentFindIdx, setCurrentFindIdx] = useState(-1);
   const [formatBrush, setFormatBrush] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
   const fileRef = useRef(null);
-  const indentDoneRef = useRef(null); // 记录已处理的章节ID
+  const indentDoneRef = useRef(null);
 
   const content = chapter.content || '';
 
@@ -199,26 +199,48 @@ export default function ChapterEditor({ bookId, chapter, books, onCalendarClick 
     if (!file) return;
     setImporting(true);
     try {
+      const extractText = (raw) => {
+        const div = document.createElement('div');
+        div.innerHTML = raw;
+        div.querySelectorAll('p,div,li,h1,h2,h3,h4,h5,h6,br,tr,section,article').forEach(el => {
+          el.insertAdjacentText('afterend', '\n');
+        });
+        const t = div.textContent || div.innerText || '';
+        return t.replace(/\n{3,}/g, '\n\n').trim();
+      };
+
       let text = '';
-      const ext = file.name.split('.').pop().toLowerCase();
-      if (ext === 'docx') {
-        const buf = await file.arrayBuffer();
-        const result = await mammoth.convertToHtml({ arrayBuffer: buf });
-        const div = document.createElement('div');
-        div.innerHTML = result.value;
-        text = Array.from(div.querySelectorAll('p,h1,h2,h3,h4,h5,h6,li'))
-          .map(p => p.textContent.trim()).filter(Boolean).join('\n');
-        if (!text) text = div.textContent.trim();
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      if (ext === 'docx' || ext === 'doc') {
+        const readBuf = () => new Promise((res, rej) => {
+          const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsArrayBuffer(file);
+        });
+        try {
+          const buf = await readBuf();
+          const result = await mammoth.extractRawText({ arrayBuffer: buf });
+          text = (result.value || '').trim();
+        } catch {}
+        if (!text) {
+          try {
+            const buf = await readBuf();
+            const zip = await JSZip.loadAsync(buf);
+            const xml = await zip.file('word/document.xml')?.async('string');
+            if (xml) text = xml.replace(/<[^>]+>/g,'\n').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/\n{3,}/g,'\n\n').trim();
+          } catch {}
+        }
+        if (!text) {
+          text = await new Promise(res => { const r = new FileReader(); r.onload = () => res(String(r.result||'')); r.onerror = () => res(''); r.readAsText(file); });
+        }
       } else if (ext === 'html' || ext === 'htm') {
-        const div = document.createElement('div');
-        div.innerHTML = await file.text();
-        text = div.textContent.trim();
+        text = extractText(await file.text());
       } else {
         text = await file.text();
       }
+      // 保留原文换行结构，每段加首行缩进
       const lines = text.split('\n').map(line => {
         const t = line.trim();
-        return t ? INDENT + t : '';
+        if (!t) return '';  // 空行保留
+        return INDENT + t;
       }).join('\n');
       updateChapterContent(bookId, chapter.id, lines);
       indentDoneRef.current = chapter.id;
@@ -251,7 +273,8 @@ export default function ChapterEditor({ bookId, chapter, books, onCalendarClick 
   }, [chapter.id]);
 
   return (
-    <div className="chapter-editor">
+    <div className={`chapter-editor${focusMode ? ' focus-mode' : ''}`}>
+      {focusMode && <button className="focus-exit-btn" onClick={() => setFocusMode(false)}>✕ 退出专注</button>}
       {/* 工具栏 */}
       <div className="editor-toolbar">
         <div className="toolbar-group">
@@ -265,6 +288,10 @@ export default function ChapterEditor({ bookId, chapter, books, onCalendarClick 
           <span className="tb-divider" />
           <button className="tb-btn" onClick={() => fileRef.current?.click()} disabled={importing}>
             {importing ? '⏳' : '📥'} 导入
+          </button>
+          <span className="tb-divider" />
+          <button className={`tb-btn ${focusMode ? 'active' : ''}`} onClick={() => setFocusMode(!focusMode)}>
+            🧘 专注
           </button>
         </div>
         <div className="toolbar-info">

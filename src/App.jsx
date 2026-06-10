@@ -1,32 +1,52 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useState, lazy, Suspense } from 'react';
 import useStore from './store';
 import NavBar from './components/NavBar';
-import MindMapView from './components/MindMapView';
-import InspirationView from './components/InspirationView';
-import GachaMachine from './components/GachaMachine';
 import DirectoryView from './components/DirectoryView';
-import DiffViewer from './components/DiffViewer';
-import SettingsPanel from './components/SettingsPanel';
-import QuickNotes from './components/QuickNotes';
-import CalendarView from './components/CalendarView';
-import TrashView from './components/TrashView';
+import MobileStack from './components/MobileStack';
+import MobileFullPage from './components/MobileFullPage';
+import { spawnPaw } from './components/Icon';
+import { loadSplash } from './utils/storage';
 
-const TABS = {
-  MINDMAP: 'mindmap',
-  INSPIRATION: 'inspiration',
-  DIRECTORY: 'directory',
-  GACHA: 'gacha',
-  SETTINGS: 'settings',
-  HISTORY: 'history',
+// 懒加载重量级组件
+const MindMapView = lazy(() => import('./components/MindMapView'));
+const InspirationView = lazy(() => import('./components/InspirationView'));
+const AIChatView = lazy(() => import('./components/AIChatView'));
+const DiffViewer = lazy(() => import('./components/DiffViewer'));
+const SettingsPanel = lazy(() => import('./components/SettingsPanel'));
+const GachaMachine = lazy(() => import('./components/GachaMachine'));
+const QuickNotes = lazy(() => import('./components/QuickNotes'));
+const CalendarView = lazy(() => import('./components/CalendarView'));
+const TrashView = lazy(() => import('./components/TrashView'));
+
+// 随机颜表情加载动画
+const faces = ['(=ﾟωﾟ)=','( ﾟ∀。)','(´･ω･`)','(ﾉ>ω<)ﾉ','(=^･ω･^=)','(｡･ω･｡)','(◕‿◕)','(≧∇≦)','(◍•ᴗ•◍)'];
+function randomFace() { return faces[Math.floor(Math.random() * faces.length)]; }
+const Loader = () => {
+  const [face] = useState(randomFace);
+  return <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'var(--text3)',gap:8}}>
+    <span style={{fontSize:28}}>{face}</span>
+    <span style={{fontSize:13}}>喵~ 加载中...</span>
+  </div>;
 };
 
-export default function App() {
-  const {
-    initialized, init, persist, dirty,
-    settings, books, inspirationCards,
-  } = useStore();
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  useEffect(() => {
+    let timer;
+    const onResize = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => setIsMobile(window.innerWidth <= 768), 200);
+    };
+    window.addEventListener('resize', onResize);
+    return () => { window.removeEventListener('resize', onResize); clearTimeout(timer); };
+  }, []);
+  return isMobile;
+}
 
-  const [activeTab, setActiveTab] = useState(TABS.DIRECTORY);
+export default function App() {
+  const { initialized, init, persist, dirty, settings, books, inspirationCards } = useStore();
+  const isMobile = useIsMobile();
+  const [activeTab, setActiveTab] = useState('directory');
   const [gachaOpen, setGachaOpen] = useState(false);
   const [quickNoteOpen, setQuickNoteOpen] = useState(false);
   const [filmNoteOpen, setFilmNoteOpen] = useState(false);
@@ -34,199 +54,199 @@ export default function App() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [selectedBookId, setSelectedBookId] = useState(null);
   const [selectedChapterId, setSelectedChapterId] = useState(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyTarget, setHistoryTarget] = useState(null);
+  const [mindmapDrillId, setMindmapDrillId] = useState(null);
+  const [inspDrillId, setInspDrillId] = useState(null);
 
-  // 初始化时加载数据
-  useEffect(() => {
-    init();
-  }, []);
+  useEffect(() => { init(); }, []);
 
-  // 选中第一本书
   useEffect(() => {
-    if (books.length > 0 && !selectedBookId) {
-      setSelectedBookId(books[0].id);
-    }
+    if (books.length > 0 && !selectedBookId) setSelectedBookId(books[0].id);
   }, [books, selectedBookId]);
 
-  // 会话存档：关闭/刷新时自动保存
+  // 每8秒自动保存
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
-
   useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      if (dirtyRef.current) {
-        // 同步保存（beforeunload 中必须同步）
-        const { books: b, inspirationCards: ic, settings: s } = useStore.getState();
-        const saveDataSync = () => {
-          try {
-            const data = JSON.stringify({ books: b, inspirationCards: ic, settings: s });
-            localStorage.setItem('novel_novel_app_data', data);
-            // 同时保存历史版本
-            const histKey = 'novel_history_novel_app_data';
-            const existing = JSON.parse(localStorage.getItem(histKey) || '[]');
-            existing.unshift(Date.now());
-            const trimmed = existing.slice(0, 20);
-            localStorage.setItem(histKey, JSON.stringify(trimmed));
-            localStorage.setItem(`novel_history_novel_app_data_${Date.now()}`, data);
-          } catch (err) { /* ignore */ }
-        };
-        saveDataSync();
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
+    if (!initialized) return;
+    const t = setInterval(() => { if (dirtyRef.current) persist(); }, 8000);
+    return () => clearInterval(t);
+  }, [initialized]);
 
-  // 快捷键 Ctrl+S 手动存档
+  // Ctrl+S 手动保存
   useEffect(() => {
-    const handler = (e) => {
+    const h = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        persist().then(() => console.log('💾 手动存档完成'));
+        persist();
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    document.addEventListener('keydown', h, { capture: true });
+    return () => document.removeEventListener('keydown', h, { capture: true });
   }, []);
 
-  const handleOpenHistory = useCallback((bookId, chapterId) => {
-    setHistoryTarget({ type: 'chapter', bookId, chapterId });
-    setHistoryOpen(true);
+  // 🐾 全局猫爪点击效果
+  useEffect(() => {
+    const h = (e) => {
+      const el = e.target.closest('button, .icon-wrap, .nav-brand, .clickable, [role="button"]');
+      if (el) spawnPaw(e);
+    };
+    window.addEventListener('click', h);
+    return () => window.removeEventListener('click', h);
   }, []);
 
-  const handleOpenInspirationHistory = useCallback((cardId) => {
-    setHistoryTarget({ type: 'inspiration', cardId });
-    setHistoryOpen(true);
-  }, []);
 
-  // 应用主题
+  const fontMap = {
+    font1: '"Microsoft YaHei","PingFang SC",sans-serif',
+    font2: '"SimSun","Noto Serif SC",serif',
+    font3: '"KaiTi","STKaiti",serif',
+    font4: '"SimHei","PingFang SC",sans-serif',
+    font5: '"DengXian","PingFang SC",sans-serif',
+    font6: '"FangSong","STFangsong",serif',
+    font7: '"Rounded Mplus 1c","Microsoft YaHei",sans-serif',
+    font8: '"ZCOOL KuaiLe","Comic Sans MS",cursive',
+  };
+
+  const fontColorRgba = (() => {
+    const hex = settings.fontColor || '#4a3728';
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${settings.fontOpacity ?? 0.92})`;
+  })();
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', settings.theme || 'warm');
   }, [settings.theme]);
 
-  // 应用设置：字体加粗
-  const fontMap = {
-    font1: '"Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "微软雅黑", sans-serif',
-    font2: '"SimSun", "Noto Serif SC", "STSong", "宋体", serif',
-    font3: '"KaiTi", "STKaiti", "楷体", serif',
-    font4: '"SimHei", "PingFang SC", "Heiti SC", "黑体", sans-serif',
-    font5: '"DengXian", "PingFang SC", "等线", sans-serif',
-    font6: '"FangSong", "STFangsong", "仿宋", serif',
-    font7: '"Rounded Mplus 1c", "Microsoft YaHei", "PingFang SC", sans-serif',
-    font8: '"ZCOOL KuaiLe", "Comic Sans MS", "KaiTi", cursive, sans-serif',
-  };
-
-  const appStyle = {
-    fontFamily: fontMap[settings.fontFamily] || fontMap.font1,
-    fontSize: `${settings.fontSize}px`,
-    color: settings.fontColor,
-    fontWeight: ['font4','font7'].includes(settings.fontFamily) ? 500 : 400,
-  };
-
   if (!initialized) {
+    // 从 localStorage 直接读开屏设置
+    let splash = null, splashFit = 'cover', splashPos = 'center';
+    try {
+      splash = loadSplash();
+      const raw = localStorage.getItem('novel_novel_app_data');
+      if (raw) { const s = JSON.parse(raw).settings; splashFit = s?.splashFit || 'cover'; splashPos = s?.splashPos || 'center'; }
+    } catch (_) {}
+    const bgStyle = splash ? {
+      background:`url(${splash}) ${splashPos}/${splashFit}`,
+      backgroundRepeat:'no-repeat',
+    } : {};
+    return <div className="app-loading" style={bgStyle} />;
+  }
+
+  // ====== 手机端：翻页式导航 ======
+  if (isMobile) {
     return (
-      <div className="app-loading">
-        <div className="loading-cat">🐱</div>
-        <p>(=ﾟωﾟ)= 喵~ 正在加载中...</p>
+      <div className="app-container mobile-app" style={{
+        fontFamily: fontMap[settings.fontFamily] || fontMap.font1,
+        fontSize: settings.fontSize + 'px',
+        color: fontColorRgba,
+      }}>
+        {/* MobileStack 始终挂载（display切换保活） */}
+        <div style={{display: activeTab === 'directory' ? 'flex' : 'none', flex:1, flexDirection:'column', height:'100%'}}>
+          <MobileStack
+            activeMainTab={activeTab}
+            onTabChange={setActiveTab}
+            onGachaClick={() => setGachaOpen(true)}
+            onQuickNote={() => setQuickNoteOpen(true)}
+            onFilmNote={() => setFilmNoteOpen(true)}
+            onCalendarClick={() => setCalendarOpen(true)}
+            onTrashClick={() => setTrashOpen(true)}
+          />
+        </div>
+
+        {/* 思维导图全屏页 */}
+        {activeTab === 'mindmap' && (
+          mindmapDrillId ? (
+            <MobileFullPage title="🧠 思维导图" onBack={() => setMindmapDrillId(null)}>
+              <Suspense fallback={<Loader />}><MindMapView books={books} selectedBookId={selectedBookId} onSelectBook={setSelectedBookId}
+                focusCardId={mindmapDrillId} onFocusCard={setMindmapDrillId} isMobile /></Suspense>
+            </MobileFullPage>
+          ) : (
+            <MobileFullPage title="🧠 思维导图" onBack={() => setActiveTab('directory')}
+              actions={<><button className="tb-btn" onClick={() => document.querySelector('.btn-add-card')?.click()}>+母卡片</button><button className="tb-btn" onClick={() => document.querySelector('.btn-import')?.click()}>📥导入</button></>}>
+              <Suspense fallback={<Loader />}><MindMapView books={books} selectedBookId={selectedBookId} onSelectBook={setSelectedBookId}
+                onFocusCard={setMindmapDrillId} isMobile /></Suspense>
+            </MobileFullPage>
+          )
+        )}
+
+        {/* 灵感卡片全屏页 */}
+        {activeTab === 'inspiration' && (
+          inspDrillId ? (
+            <MobileFullPage title="💡 灵感卡片" onBack={() => setInspDrillId(null)}>
+              <Suspense fallback={<Loader />}><InspirationView books={books} drillCardId={inspDrillId} onBack={() => setInspDrillId(null)} /></Suspense>
+            </MobileFullPage>
+          ) : (
+            <MobileFullPage title="💡 灵感卡片" onBack={() => setActiveTab('directory')}
+              actions={<><button className="tb-btn" onClick={() => document.querySelector('.inspiration-filter .btn-create-inspiration')?.click()}>+新卡片</button><button className="tb-btn" onClick={() => document.getElementById('insp-import-file')?.click()}>📥导入</button></>}>
+              <Suspense fallback={<Loader />}><InspirationView books={books} onDrillCard={setInspDrillId} isMobile /></Suspense>
+            </MobileFullPage>
+          )
+        )}
+
+        {/* AI 对话全屏页 */}
+        {activeTab === 'aichat' && (
+          <MobileFullPage title="🤖 AI 对话" onBack={() => setActiveTab('directory')}>
+            <Suspense fallback={<Loader />}><AIChatView chapterContent={selectedChapterId ? books.find(b=>b.id===selectedBookId)?.chapters?.find(c=>c.id===selectedChapterId)?.content : null}
+              chapterTitle={selectedChapterId ? books.find(b=>b.id===selectedBookId)?.chapters?.find(c=>c.id===selectedChapterId)?.title : null} /></Suspense>
+          </MobileFullPage>
+        )}
+
+        {/* 设置全屏页 */}
+        {activeTab === 'settings' && (
+          <MobileFullPage title="⚙️ 设置" onBack={() => setActiveTab('directory')}>
+            <Suspense fallback={<Loader />}><SettingsPanel /></Suspense>
+          </MobileFullPage>
+        )}
+
+        {/* 弹窗 */}
+        <Suspense fallback={null}>
+          {gachaOpen && <GachaMachine books={books} onClose={() => setGachaOpen(false)} />}
+          {quickNoteOpen && <QuickNotes mode="quick" books={books} onClose={() => setQuickNoteOpen(false)} />}
+          {filmNoteOpen && <QuickNotes mode="film" books={books} onClose={() => setFilmNoteOpen(false)} />}
+          {calendarOpen && <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setCalendarOpen(false)}>
+            <div className="cal-modal"><button className="modal-close" onClick={() => setCalendarOpen(false)}>✕</button><CalendarView /></div></div>}
+          {trashOpen && <TrashView onClose={() => setTrashOpen(false)} />}
+        </Suspense>
       </div>
     );
   }
 
+  // ====== 桌面端：原布局 ======
   return (
-    <div className="app-container" style={appStyle}>
-      <NavBar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
+    <div className="app-container" style={{
+      fontFamily: fontMap[settings.fontFamily] || fontMap.font1,
+      fontSize: settings.fontSize + 'px',
+      color: fontColorRgba,
+    }}>
+      <NavBar activeTab={activeTab} onTabChange={setActiveTab}
         onGachaClick={() => setGachaOpen(true)}
         onQuickNote={() => setQuickNoteOpen(true)}
         onFilmNote={() => setFilmNoteOpen(true)}
         onCalendarClick={() => setCalendarOpen(true)}
-        onTrashClick={() => setTrashOpen(true)}
-      />
+        onTrashClick={() => setTrashOpen(true)} />
 
       <div className="main-content">
-        {activeTab === TABS.MINDMAP && (
-          <MindMapView
-            books={books}
-            selectedBookId={selectedBookId}
-            onSelectBook={setSelectedBookId}
-          />
-        )}
-
-        {activeTab === TABS.INSPIRATION && (
-          <InspirationView
-            books={books}
-            onOpenHistory={handleOpenInspirationHistory}
-          />
-        )}
-
-        {activeTab === TABS.DIRECTORY && (
-          <DirectoryView
-            selectedBookId={selectedBookId}
-            selectedChapterId={selectedChapterId}
-            onSelectBook={setSelectedBookId}
-            onSelectChapter={setSelectedChapterId}
-            onCalendarClick={() => setCalendarOpen(true)}
-          />
-        )}
-
-        {activeTab === TABS.SETTINGS && (
-          <SettingsPanel />
-        )}
-
-        {activeTab === TABS.HISTORY && (
-          <DiffViewer
-            books={books}
-            inspirationCards={inspirationCards}
-          />
-        )}
+        <Suspense fallback={<Loader />}>
+          {activeTab === 'mindmap' && <MindMapView books={books} selectedBookId={selectedBookId} onSelectBook={setSelectedBookId} />}
+          {activeTab === 'inspiration' && <InspirationView books={books} />}
+          {activeTab === 'directory' && <DirectoryView selectedBookId={selectedBookId} selectedChapterId={selectedChapterId}
+            onSelectBook={setSelectedBookId} onSelectChapter={setSelectedChapterId} onCalendarClick={() => setCalendarOpen(true)} />}
+          {activeTab === 'settings' && <SettingsPanel />}
+          {activeTab === 'aichat' && <AIChatView chapterContent={selectedChapterId ? books.find(b=>b.id===selectedBookId)?.chapters?.find(c=>c.id===selectedChapterId)?.content : null}
+            chapterTitle={selectedChapterId ? books.find(b=>b.id===selectedBookId)?.chapters?.find(c=>c.id===selectedChapterId)?.title : null} />}
+          {activeTab === 'history' && <DiffViewer books={books} inspirationCards={inspirationCards} />}
+        </Suspense>
       </div>
 
-      {gachaOpen && (
-        <GachaMachine
-          books={books}
-          onClose={() => setGachaOpen(false)}
-        />
-      )}
-
-      {quickNoteOpen && (
-        <QuickNotes
-          mode="quick"
-          books={books}
-          onClose={() => setQuickNoteOpen(false)}
-        />
-      )}
-
-      {filmNoteOpen && (
-        <QuickNotes
-          mode="film"
-          books={books}
-          onClose={() => setFilmNoteOpen(false)}
-        />
-      )}
-
-      {calendarOpen && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setCalendarOpen(false)}>
-          <div className="cal-modal">
-            <button className="modal-close" onClick={() => setCalendarOpen(false)}>✕</button>
-            <CalendarView />
-          </div>
-        </div>
-      )}
-
-      {trashOpen && (
-        <TrashView onClose={() => setTrashOpen(false)} />
-      )}
-
-      {historyOpen && historyTarget && (
-        <DiffViewer
-          books={books}
-          inspirationCards={inspirationCards}
-          target={historyTarget}
-          onClose={() => { setHistoryOpen(false); setHistoryTarget(null); }}
-        />
-      )}
+      <Suspense fallback={null}>
+        {gachaOpen && <GachaMachine books={books} onClose={() => setGachaOpen(false)} />}
+        {quickNoteOpen && <QuickNotes mode="quick" books={books} onClose={() => setQuickNoteOpen(false)} />}
+        {filmNoteOpen && <QuickNotes mode="film" books={books} onClose={() => setFilmNoteOpen(false)} />}
+        {calendarOpen && <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setCalendarOpen(false)}>
+          <div className="cal-modal"><button className="modal-close" onClick={() => setCalendarOpen(false)}>✕</button><CalendarView /></div></div>}
+        {trashOpen && <TrashView onClose={() => setTrashOpen(false)} />}
+      </Suspense>
     </div>
   );
 }

@@ -1,111 +1,136 @@
-import React from 'react';
+import React, { useRef, useCallback } from 'react';
+import useStore from '../store';
 
-// Instagram风格极简线性图标
-// 统一24x24 viewBox，1.5px描边，圆角端点
+const catIcons = [
+  'brand', 'book', 'mindmap', 'lightbulb', 'clock', 'settings',
+  'gacha', 'quicknote', 'film', 'calendar', 'trash', 'plus', 'search',
+];
 
-const icons = {
-  // 书籍目录 — 书本
-  book: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 19.5V4.5C4 3.67 4.67 3 5.5 3H20v15H5.5C4.67 18 4 18.67 4 19.5ZM4 19.5C4 20.33 4.67 21 5.5 21H20" />
-      <line x1="8" y1="7" x2="16" y2="7" />
-      <line x1="8" y1="10" x2="16" y2="10" />
-    </svg>
-  ),
+// 全局单例文件输入
+let globalInput = null;
+let globalCallback = null;
+function getGlobalInput(cb) {
+  globalCallback = cb;
+  if (!globalInput) {
+    globalInput = document.createElement('input');
+    globalInput.type = 'file';
+    globalInput.accept = 'image/*';
+    globalInput.style.display = 'none';
+    globalInput.onchange = (e) => { if (globalCallback) globalCallback(e); globalInput.value = ''; };
+    document.body.appendChild(globalInput);
+  }
+  return globalInput;
+}
 
-  // 思维导图 — 节点连线
-  mindmap: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="5" r="2.5" />
-      <circle cx="5" cy="13" r="2.5" />
-      <circle cx="19" cy="13" r="2.5" />
-      <circle cx="8" cy="20" r="2" />
-      <circle cx="16" cy="20" r="2" />
-      <line x1="11" y1="7.5" x2="6.5" y2="11" />
-      <line x1="13" y1="7.5" x2="17.5" y2="11" />
-      <line x1="6" y1="15.3" x2="7" y2="18.2" />
-      <line x1="18" y1="15.3" x2="17" y2="18.2" />
-    </svg>
-  ),
+export function getBookCat(bookId) {
+  let hash = 0;
+  for (let i = 0; i < (bookId || '').length; i++) {
+    hash = ((hash << 5) - hash) + bookId.charCodeAt(i);
+    hash |= 0;
+  }
+  return catIcons[Math.abs(hash) % catIcons.length];
+}
 
-  // 灵感卡片 — 灯泡
-  lightbulb: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 17.5h4" />
-      <path d="M9.5 21h5" />
-      <path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V16c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-1.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z" />
-    </svg>
-  ),
-
-  // 历史版本 — 时钟
-  clock: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  ),
-
-  // 设置 — 齿轮
-  settings: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-    </svg>
-  ),
-
-  // 扭蛋机 — 礼物盒/扭蛋
-  gacha: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="13" r="8" />
-      <circle cx="12" cy="13" r="3" />
-      <line x1="12" y1="5" x2="12" y2="10" />
-      <circle cx="12" cy="4" r="1.5" fill="currentColor" stroke="none" />
-    </svg>
-  ),
-
-  // 文字速记 — 闪电/速写
-  quicknote: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-    </svg>
-  ),
-
-  // 拉片速记 — 胶片/播放
-  film: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="4" width="20" height="16" rx="2" />
-      <line x1="2" y1="8" x2="22" y2="8" />
-      <line x1="2" y1="16" x2="22" y2="16" />
-      <line x1="7" y1="4" x2="7" y2="8" />
-      <line x1="7" y1="16" x2="7" y2="20" />
-      <line x1="17" y1="4" x2="17" y2="8" />
-      <line x1="17" y1="16" x2="17" y2="20" />
-    </svg>
-  ),
-
-  // 加号
-  plus: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  ),
-
-  // 搜索
-  search: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  ),
-};
+export function BookCoverImg({ bookId, cover, size = 28 }) {
+  const catName = getBookCat(bookId);
+  const src = cover || `./icons/${catName}.png`;
+  return <img src={src} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />;
+}
 
 export default function Icon({ name, size = 24, className = '' }) {
-  const icon = icons[name];
-  if (!icon) return null;
+  const { settings, updateSettings } = useStore();
+  const longPressRef = useRef(null);
+  const triggeredRef = useRef(false);
+  const justLongPressedRef = useRef(false);
+
+  if (!catIcons.includes(name)) return null;
+
+  const customSrc = settings.customIcons?.[name];
+  const imgSrc = customSrc || `./icons/${name}.png`;
+
+  const handleUpload = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) { triggeredRef.current = false; justLongPressedRef.current = false; return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateSettings({ customIcons: { ...settings.customIcons, [name]: reader.result } });
+    };
+    reader.readAsDataURL(file);
+    justLongPressedRef.current = true;
+    triggeredRef.current = false;
+    setTimeout(() => { justLongPressedRef.current = false; }, 300);
+  }, [name, settings.customIcons, updateSettings]);
+
+  const openPicker = useCallback(() => {
+    if (triggeredRef.current) return;
+    triggeredRef.current = true;
+    justLongPressedRef.current = true;
+    const inp = getGlobalInput(handleUpload);
+    setTimeout(() => inp.click(), 10);
+    setTimeout(() => { triggeredRef.current = false; }, 1200);
+  }, [handleUpload]);
+
+  const handleContextMenu = (e) => { e.preventDefault(); e.stopPropagation(); openPicker(); };
+
+  const handleClick = (e) => {
+    if (justLongPressedRef.current) { e.preventDefault(); e.stopPropagation(); justLongPressedRef.current = false; }
+  };
+
+  const handleTouchStart = () => {
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+    justLongPressedRef.current = false;
+    longPressRef.current = setTimeout(() => { longPressRef.current = null; openPicker(); }, 600);
+  };
+  const handleTouchEnd = () => { if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; } };
+
   return (
-    <span className={`icon-wrap ${className}`} style={{ width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      {icon}
+    <span className={`icon-wrap ${className}`}
+      style={{ width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, borderRadius: '50%', overflow: 'hidden', background: 'transparent' }}
+      onClick={handleClick} onContextMenu={handleContextMenu}
+      onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchMove={handleTouchEnd} onTouchCancel={handleTouchEnd}
+      title="右键/长按更换图标">
+      <img src={imgSrc} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
     </span>
   );
+}
+
+// 🐾
+export function PawPrint({ size = 30, style = {} }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" style={{ pointerEvents: 'none', ...style }}>
+      <ellipse cx="32" cy="43" rx="13" ry="10" fill="#F4A0B0" opacity="0.9" />
+      <ellipse cx="31" cy="43" rx="9" ry="7" fill="#E8829E" opacity="0.55" />
+      <ellipse cx="29" cy="41" rx="4" ry="3" fill="#FAD0D8" opacity="0.4" />
+      <ellipse cx="15" cy="22" rx="6" ry="6.5" fill="#F4A0B0" opacity="0.9" transform="rotate(-10 15 22)" />
+      <ellipse cx="14" cy="23" rx="4" ry="4.5" fill="#E8829E" opacity="0.5" transform="rotate(-10 14 23)" />
+      <ellipse cx="32" cy="14" rx="6" ry="6.5" fill="#F4A0B0" opacity="0.9" />
+      <ellipse cx="31" cy="15" rx="4" ry="4.5" fill="#E8829E" opacity="0.5" />
+      <ellipse cx="49" cy="22" rx="6" ry="6.5" fill="#F4A0B0" opacity="0.9" transform="rotate(10 49 22)" />
+      <ellipse cx="50" cy="23" rx="4" ry="4.5" fill="#E8829E" opacity="0.5" transform="rotate(10 50 23)" />
+      <ellipse cx="32" cy="8" rx="5" ry="5.5" fill="#F4A0B0" opacity="0.9" />
+      <ellipse cx="31" cy="9" rx="3.5" ry="4" fill="#E8829E" opacity="0.5" />
+    </svg>
+  );
+}
+
+export function spawnPaw(e) {
+  const paw = document.createElement('div');
+  paw.className = 'paw-ripple';
+  paw.style.left = (e.clientX - 18) + 'px';
+  paw.style.top = (e.clientY - 18) + 'px';
+  paw.innerHTML = `<svg width="36" height="36" viewBox="0 0 64 64" fill="none" style="pointer-events:none">
+    <ellipse cx="32" cy="43" rx="13" ry="10" fill="#F4A0B0" opacity="0.9"/>
+    <ellipse cx="31" cy="43" rx="9" ry="7" fill="#E8829E" opacity="0.55"/>
+    <ellipse cx="29" cy="41" rx="4" ry="3" fill="#FAD0D8" opacity="0.4"/>
+    <ellipse cx="15" cy="22" rx="6" ry="6.5" fill="#F4A0B0" opacity="0.9" transform="rotate(-10 15 22)"/>
+    <ellipse cx="14" cy="23" rx="4" ry="4.5" fill="#E8829E" opacity="0.5" transform="rotate(-10 14 23)"/>
+    <ellipse cx="32" cy="14" rx="6" ry="6.5" fill="#F4A0B0" opacity="0.9"/>
+    <ellipse cx="31" cy="15" rx="4" ry="4.5" fill="#E8829E" opacity="0.5"/>
+    <ellipse cx="49" cy="22" rx="6" ry="6.5" fill="#F4A0B0" opacity="0.9" transform="rotate(10 49 22)"/>
+    <ellipse cx="50" cy="23" rx="4" ry="4.5" fill="#E8829E" opacity="0.5" transform="rotate(10 50 23)"/>
+    <ellipse cx="32" cy="8" rx="5" ry="5.5" fill="#F4A0B0" opacity="0.9"/>
+    <ellipse cx="31" cy="9" rx="3.5" ry="4" fill="#E8829E" opacity="0.5"/>
+  </svg>`;
+  document.body.appendChild(paw);
+  setTimeout(() => paw.remove(), 700);
 }

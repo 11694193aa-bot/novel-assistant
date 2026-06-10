@@ -447,11 +447,12 @@ body {
 .editor-meta { display:flex; gap:10px; font-size:11px; color:var(--text3); }
 .editor-body { flex:1; overflow:hidden; }
 .editor-textarea {
-  width:100%; height:100%; padding:28px 32px; border:none;
+  width:100%; height:100%; padding:36px 38px; border:none;
   font-family:inherit; font-size:inherit; font-weight:inherit;
   color:inherit; resize:none; outline:none;
   background:linear-gradient(180deg,var(--card) 0%,var(--bg) 30%);
-  line-height:2; tab-size:4;
+  line-height:2.1; letter-spacing:0.015em; tab-size:4;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
   -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none;
 }
 .editor-textarea::placeholder { color:var(--text3); opacity:.5; }
@@ -491,14 +492,14 @@ body {
 
 .chapter-list { padding:3px 0; }
 .chapter-item {
-  display:flex; align-items:center; gap:5px; padding:8px 10px;
-  cursor:pointer; transition:.1s; font-size:12px; font-weight:600;
+  display:flex; align-items:center; gap:7px; padding:10px 12px;
+  cursor:pointer; transition:background .2s; font-size:12px; font-weight:600;
 }
 .chapter-item:hover { background:var(--hover); }
 .chapter-item.active { background:var(--active); font-weight:700; }
 .chapter-card-count {
   margin-left:auto; font-size:10px; color:var(--text3);
-  background:var(--bg2); padding:1px 6px; border-radius:16px;
+  background:var(--bg2); padding:2px 7px; border-radius:16px;
 }
 
 .mindmap-main { flex:1; display:flex; flex-direction:column; overflow:hidden; position:relative; }
@@ -1330,11 +1331,12 @@ body {
 
 /* 全屏编辑区 */
 .ms-editor-textarea {
-  flex:1; width:100%; padding:20px 18px; border:none;
+  flex:1; width:100%; padding:24px 20px; border:none;
   font-family:inherit; font-size:16px; font-weight:inherit;
-  color:var(--text); resize:none; outline:none;
-  background:var(--card); line-height:2.0;
+  color:inherit; resize:none; outline:none;
+  background:var(--card); line-height:2.05; letter-spacing:0.01em;
   -webkit-overflow-scrolling:touch;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
   -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none;
 }
 .ms-editor-textarea::placeholder { color:var(--text3); opacity:.5; }
