@@ -1,99 +1,134 @@
-import { cloudSave, cloudLoad, cloudListHistory, cloudLoadHistory, getWebDAVConfig } from './webdav';
+import { cloudSave, cloudLoad } from './webdav';
+import { idbSet, idbGet, idbDelete, idbKeys } from './idb';
 
-// 本地存储 + 云端同步双写
-const API = window.electronAPI;
+// ========== 同步锁 ==========
+let _syncing = false;
+export function isSyncing() { return _syncing; }
+function lockSync() { _syncing = true; }
+function unlockSync() { _syncing = false; }
+
+// ========== 核心存储（IndexedDB为主，localStorage降级） ==========
 
 export async function saveData(key, data) {
-  // 本地保存
-  if (API) {
-    await API.saveData(key, data);
-  } else {
-    localStorage.setItem(`novel_${key}`, JSON.stringify(data));
+  // 加时间戳
+  const stamped = { ...data, _updatedAt: Date.now() };
+  // 写入 IndexedDB
+  try {
+    await idbSet(`novel_${key}`, stamped);
+  } catch (e) {
+    console.error('IndexedDB 写入失败:', e.message);
   }
-  // 云端同步（后台静默，不阻塞）
-  if (getWebDAVConfig()) {
-    cloudSave(data).catch(() => {});
+  // 异步推送到云端（不阻塞）
+  if (!_syncing) {
+    _syncing = true;
+    try {
+      await Promise.race([cloudSave(stamped), new Promise(r => setTimeout(() => r(false), 8000))]);
+    } catch (e) {
+      console.error('云端同步失败:', e.message);
+    } finally {
+      _syncing = false;
+    }
   }
 }
 
 export async function loadData(key) {
-  // 优先从云端加载
-  if (getWebDAVConfig()) {
-    try {
-      const cloud = await cloudLoad();
-      if (cloud) {
-        // 云端数据同步到本地
-        if (API) {
-          await API.saveData(key, cloud);
-        } else {
-          localStorage.setItem(`novel_${key}`, JSON.stringify(cloud));
-        }
-        return cloud;
-      }
-    } catch {}
+  // 1. 读 IndexedDB
+  let localData = null;
+  try {
+    localData = await idbGet(`novel_${key}`);
+  } catch (e) {
+    console.error('IndexedDB 读取失败:', e.message);
   }
-  // 降级到本地
-  if (API) {
-    const res = await API.loadData(key);
-    return res.data;
-  } else {
-    const raw = localStorage.getItem(`novel_${key}`);
-    return raw ? JSON.parse(raw) : null;
+
+  // 2. 读云端
+  let cloudData = null;
+  try {
+    cloudData = await Promise.race([cloudLoad(), new Promise(r => setTimeout(() => r(null), 5000))]);
+  } catch (e) {
+    console.error('云端读取失败:', e.message);
   }
+
+  // 3. 时间戳冲突解决
+  const localTs = localData?._updatedAt || 0;
+  const cloudTs = cloudData?._updatedAt || 0;
+  const localBooks = (localData?.books || []).length;
+  const cloudBooks = (cloudData?.books || []).length;
+
+  // 无本地 → 用云端
+  if (!localData || localBooks === 0) {
+    if (cloudData && cloudBooks > 0) {
+      try { await idbSet(`novel_${key}`, cloudData); } catch (_) {}
+      return cloudData;
+    }
+    return localData || cloudData || null;
+  }
+
+  // 云端更新且内容不少于本地 → 云端覆盖本地（防数据量异常减少）
+  const localItems = (localData?.inspirationCards || []).length + (localData?.aiConversations || []).length;
+  const cloudItems = (cloudData?.inspirationCards || []).length + (cloudData?.aiConversations || []).length;
+  if (cloudTs > localTs && cloudBooks > 0 && cloudItems >= localItems) {
+    try { await idbSet(`novel_${key}`, cloudData); } catch (_) {}
+    return cloudData;
+  }
+
+  // 本地更新 → 推送到云端
+  if (localTs > cloudTs) {
+    cloudSave(localData).catch(() => {});
+  }
+
+  return localData;
+}
+
+// ========== 历史版本（IndexedDB） ==========
+
+function formatCompactDate(ts) {
+  const d = new Date(ts);
+  const M = String(d.getMonth() + 1).padStart(2, '0');
+  const D = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${M}-${D} ${h}:${m}`;
 }
 
 export async function saveHistory(key, data, timestamp) {
-  // 本地
-  if (API) {
-    await API.saveHistory(key, data, timestamp);
-  } else {
-    const allKeys = JSON.parse(localStorage.getItem(`novel_history_${key}`) || '[]');
+  try {
+    const historyKey = `novel_history_${key}`;
+    const allKeys = (await idbGet(historyKey)) || [];
     allKeys.unshift(timestamp);
     const trimmed = allKeys.slice(0, 20);
-    localStorage.setItem(`novel_history_${key}`, JSON.stringify(trimmed));
-    localStorage.setItem(`novel_history_${key}_${timestamp}`, JSON.stringify(data));
-    if (trimmed.length < allKeys.length) {
-      allKeys.slice(20).forEach(ts => {
-        localStorage.removeItem(`novel_history_${key}_${ts}`);
-      });
-    }
+    await idbSet(historyKey, trimmed);
+    await idbSet(`novel_history_${key}_${timestamp}`, data);
+  } catch (e) {
+    console.error('历史保存失败:', e.message);
   }
-  // 云端历史在 cloudSave 里一并处理
 }
 
 export async function listHistory(key) {
-  // 优先云端
-  if (getWebDAVConfig()) {
-    try {
-      const cloud = await cloudListHistory();
-      if (cloud.length > 0) return cloud;
-    } catch {}
-  }
-  if (API) {
-    const res = await API.listHistory(key);
-    return res.versions || [];
-  } else {
-    const allKeys = JSON.parse(localStorage.getItem(`novel_history_${key}`) || '[]');
-    return allKeys.map(ts => ({
-      timestamp: String(ts),
-      label: new Date(ts).toLocaleString('zh-CN'),
-    }));
+  try {
+    const historyKey = `novel_history_${key}`;
+    const allKeys = (await idbGet(historyKey)) || [];
+    return allKeys.map(ts => ({ timestamp: String(ts), label: formatCompactDate(ts) }));
+  } catch (e) {
+    return [];
   }
 }
 
 export async function loadHistoryVersion(key, timestamp) {
-  // 优先云端
-  if (getWebDAVConfig()) {
-    try {
-      const cloud = await cloudLoadHistory(timestamp);
-      if (cloud) return cloud;
-    } catch {}
+  try {
+    return await idbGet(`novel_history_${key}_${timestamp}`);
+  } catch (e) {
+    return null;
   }
-  if (API) {
-    const res = await API.loadHistory(key, timestamp);
-    return res.data;
-  } else {
-    const raw = localStorage.getItem(`novel_history_${key}_${timestamp}`);
-    return raw ? JSON.parse(raw) : null;
-  }
+}
+
+// ========== Splash 图片（localStorage，较大但已压缩） ==========
+// 保持独立存储，不参与主数据同步
+export function saveSplash(dataUrl) {
+  try { localStorage.setItem('novel_splash', dataUrl); } catch (e) { console.error('splash保存失败:', e.message); }
+}
+export function loadSplash() {
+  try { return localStorage.getItem('novel_splash'); } catch (_) { return null; }
+}
+export function removeSplash() {
+  try { localStorage.removeItem('novel_splash'); } catch (_) {}
 }

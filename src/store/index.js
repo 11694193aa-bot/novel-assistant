@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { saveData, loadData, saveHistory } from '../utils/storage';
+import { saveData, loadData, saveHistory, saveSplash, loadSplash, isSyncing } from '../utils/storage';
 
 // 生成唯一ID
 export const uid = () => crypto.randomUUID ? crypto.randomUUID() :
@@ -9,19 +9,26 @@ const SAVE_KEY = 'novel_app_data';
 
 // 默认设置
 const defaultSettings = {
-  theme: 'warm',           // warm/ink/sakura/forest/ocean
-  fontFamily: 'font1',     // font1=萌体, font2=宋体, font3=黑体
+  theme: 'warm',
+  fontFamily: 'font1',
   fontSize: 16,
   fontColor: '#4a3728',
   windowOpacity: 0.9,
-  autoSaveInterval: 5000,  // 5秒自动存档
+  autoSaveInterval: 5000,
   maxHistory: 20,
+  dailyGoal: 2000,
+  avatar: null,
+  customIcons: {},
+  splashImage: null,
+  splashFit: 'cover',
+  splashPos: 'center',
 };
 
 const useStore = create((set, get) => ({
   // ============ 数据 ============
   books: [],
   inspirationCards: [],
+  aiConversations: [],    // AI对话记录 [{ id, title, bookContent, bookTitle, messages, createdAt }]
   settings: { ...defaultSettings },
   dailyCounts: {},
   trash: [],          // 回收站 [{ id, type, item, bookId, deletedAt }]
@@ -31,27 +38,33 @@ const useStore = create((set, get) => ({
   // ============ 初始化 ============
   init: async () => {
     const data = await loadData(SAVE_KEY);
+    // 独立加载开屏图
+    const splashImage = loadSplash();
     if (data) {
       set({
         books: data.books || [],
         inspirationCards: data.inspirationCards || [],
-        settings: { ...defaultSettings, ...(data.settings || {}) },
+        aiConversations: data.aiConversations || [],
+        settings: { ...defaultSettings, ...(data.settings || {}), splashImage },
         dailyCounts: data.dailyCounts || {},
         trash: data.trash || [],
         initialized: true,
       });
     } else {
-      set({ initialized: true });
+      set({ initialized: true, settings: { ...defaultSettings, splashImage } });
     }
   },
 
   // ============ 持久化 ============
   persist: async () => {
-    const { books, inspirationCards, settings, dailyCounts, trash } = get();
-    const data = { books, inspirationCards, settings, dailyCounts, trash };
+    const { books, inspirationCards, aiConversations, settings, dailyCounts, trash } = get();
+    const { splashImage, ...settingsWithoutSplash } = settings;
+    const data = { books, inspirationCards, aiConversations, settings: settingsWithoutSplash, dailyCounts, trash };
+    // IndexedDB 存储主数据（无容量限制）
     await saveData(SAVE_KEY, data);
-    const now = Date.now();
-    await saveHistory(SAVE_KEY, data, now);
+    // 开屏图单独存 localStorage（已压缩）
+    if (splashImage) saveSplash(splashImage); else { try { localStorage.removeItem('novel_splash'); } catch (_) {} }
+    await saveHistory(SAVE_KEY, data, Date.now());
     set({ dirty: false });
   },
 
@@ -111,9 +124,17 @@ const useStore = create((set, get) => ({
       title: title || '新书籍',
       createdAt: Date.now(),
       mindMapCards: [],
+      cover: null,  // 自定义封面 base64，null=使用默认猫咪图标
     };
     set(s => ({ books: [...s.books, book], dirty: true }));
     return book;
+  },
+
+  setBookCover: (bookId, coverDataUrl) => {
+    set(s => ({
+      books: s.books.map(b => b.id === bookId ? { ...b, cover: coverDataUrl } : b),
+      dirty: true,
+    }));
   },
 
   deleteBook: (bookId) => {
@@ -239,6 +260,19 @@ const useStore = create((set, get) => ({
     }));
   },
 
+  reorderChapters: (bookId, orderedIds) => {
+    set(s => ({
+      books: s.books.map(b => b.id === bookId ? {
+        ...b,
+        chapters: (b.chapters || []).map(c => ({
+          ...c,
+          order: orderedIds.indexOf(c.id),
+        })),
+      } : b),
+      dirty: true,
+    }));
+  },
+
   // ============ 思维导图卡片操作（书籍级别） ============
   addMindMapCard: (bookId, title, content = '', parentCardId = null) => {
     const card = {
@@ -314,6 +348,50 @@ const useStore = create((set, get) => ({
     }));
   },
 
+  // 移动卡片到目标卡片下（处理结构变化）
+  moveMindMapCard: (bookId, cardId, targetId) => {
+    set(s => {
+      const book = s.books.find(b => b.id === bookId);
+      if (!book) return s;
+      const cards = JSON.parse(JSON.stringify(book.mindMapCards || []));
+
+      // 递归查找并移除卡片（深拷贝保留children）
+      let movedCard = null;
+      const removeFrom = (list) => {
+        const result = [];
+        for (const c of list) {
+          if (c.id === cardId) { movedCard = JSON.parse(JSON.stringify(c)); continue; }
+          result.push({ ...c, children: removeFrom(c.children || []) });
+        }
+        return result;
+      };
+      const cleaned = removeFrom(cards);
+
+      if (!movedCard) return s;
+      movedCard.parentId = targetId || null;
+
+      // 找到目标并添加
+      if (!targetId) {
+        cleaned.push(movedCard);
+      } else {
+        let found = false;
+        const addToTarget = (list) => list.map(c => {
+          if (c.id === targetId) { found = true; return { ...c, children: [...(c.children || []), movedCard] }; }
+          return { ...c, children: addToTarget(c.children || []) };
+        });
+        const result = addToTarget(cleaned);
+        if (!found) {
+          // 目标没找到，放回顶层
+          cleaned.push(movedCard);
+          return { books: s.books.map(b => b.id === bookId ? { ...b, mindMapCards: cleaned } : b), dirty: true };
+        }
+        return { books: s.books.map(b => b.id === bookId ? { ...b, mindMapCards: result } : b), dirty: true };
+      }
+
+      return { books: s.books.map(b => b.id === bookId ? { ...b, mindMapCards: cleaned } : b), dirty: true };
+    });
+  },
+
   // ============ 灵感卡片操作 ============
   addInspirationCard: (card) => {
     const newCard = {
@@ -324,6 +402,7 @@ const useStore = create((set, get) => ({
       bookId: card.bookId || null,
       source: card.source || 'manual',
       gachaQuestion: card.gachaQuestion || '',
+      _archivedCid: card._archivedCid || '',
       createdAt: Date.now(),
     };
     set(s => ({ inspirationCards: [...s.inspirationCards, newCard], dirty: true }));
@@ -353,6 +432,24 @@ const useStore = create((set, get) => ({
         c.id === cardId ? { ...c, bookId } : c),
       dirty: true,
     }));
+  },
+
+  // ============ AI 对话 ============
+  addAIConversation: (conv) => {
+    const item = { id: uid(), title: conv.title || '未命名对话', bookContent: conv.bookContent || '',
+      bookTitle: conv.bookTitle || '', messages: conv.messages || [], createdAt: Date.now() };
+    set(s => ({ aiConversations: [...s.aiConversations, item], dirty: true }));
+    return item;
+  },
+  updateAIConversation: (id, updates) => {
+    set(s => ({ aiConversations: s.aiConversations.map(c => c.id === id ? { ...c, ...updates } : c), dirty: true }));
+  },
+  deleteAIConversation: (id) => {
+    set(s => ({ aiConversations: s.aiConversations.filter(c => c.id !== id), dirty: true }));
+  },
+  deleteAIConversations: (ids) => {
+    const idSet = new Set(ids);
+    set(s => ({ aiConversations: s.aiConversations.filter(c => !idSet.has(c.id)), dirty: true }));
   },
 
   // ============ 从章节提取到灵感卡片 ============
