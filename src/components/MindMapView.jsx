@@ -145,33 +145,21 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     setTreeDropTarget(null);
   };
 
-  // 根据触摸点计算 drop 位置并更新指示器
-  const updateTreeDropTarget = (clientX, clientY, dragCardId) => {
-    // 暂时隐藏幽灵，确保 elementFromPoint 能命中下方节点
-    setTouchGhost(prev => prev ? { ...prev, hidden: true } : null);
-    // 用 requestAnimationFrame 确保 DOM 更新后再检测
-    requestAnimationFrame(() => {
-      const el = document.elementFromPoint(clientX, clientY);
-      const node = el?.closest('.tree-node');
-      if (node) {
-        const targetId = node.dataset.cardId;
-        if (targetId && targetId !== dragCardId) {
-          const rect = node.getBoundingClientRect();
-          const y = clientY - rect.top;
-          const h = rect.height;
-          let pos = 'inside';
-          if (y < h * 0.25) pos = 'before';
-          else if (y > h * 0.75) pos = 'after';
-          setTreeDropTarget({ id: targetId, pos });
-        } else {
-          setTreeDropTarget(null);
-        }
-      } else {
-        setTreeDropTarget(null);
-      }
-      // 恢复幽灵显示
-      setTouchGhost(prev => prev ? { ...prev, hidden: false } : null);
-    });
+  // 根据触摸点计算 drop 位置（同步，幽灵有 pointer-events:none 不阻挡）
+  const hitTestDropTarget = (clientX, clientY, dragCardId) => {
+    const el = document.elementFromPoint(clientX, clientY);
+    const node = el?.closest('.tree-node');
+    if (!node) { setTreeDropTarget(null); return null; }
+    const targetId = node.dataset.cardId;
+    if (!targetId || targetId === dragCardId) { setTreeDropTarget(null); return null; }
+    const rect = node.getBoundingClientRect();
+    const y = clientY - rect.top;
+    const h = rect.height;
+    let pos = 'inside';
+    if (y < h * 0.25) pos = 'before';
+    else if (y > h * 0.75) pos = 'after';
+    setTreeDropTarget({ id: targetId, pos });
+    return { targetId, pos };
   };
 
   // 节点上的 touchstart
@@ -183,17 +171,15 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     treeDragTimer.current = setTimeout(() => {
       treeDragRef.current.active = true;
       setTreeDragId(card.id);
-      setTouchGhost({ x: t.clientX, y: t.clientY, title: card.title, hidden: false });
-      // 震动反馈
+      setTouchGhost({ x: t.clientX, y: t.clientY, title: card.title });
       if (navigator.vibrate) navigator.vibrate(15);
     }, 500);
   };
 
-  // 节点上的 touchmove 和 touchend 只做基本处理，核心逻辑在 document 级
+  // 节点上的 touchmove
   const handleTreeTouchMove = (e) => {
     const t = e.touches[0];
     if (!treeDragRef.current.active) {
-      // 未激活拖拽：移动超过10px取消长按
       const dx = t.clientX - treeDragRef.current.startX;
       const dy = t.clientY - treeDragRef.current.startY;
       if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
@@ -204,53 +190,47 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     }
     e.preventDefault();
     setTouchGhost(prev => prev ? { ...prev, x: t.clientX, y: t.clientY } : null);
-    updateTreeDropTarget(t.clientX, t.clientY, treeDragRef.current.cardId);
+    hitTestDropTarget(t.clientX, t.clientY, treeDragRef.current.cardId);
+  };
+
+  // 执行放置
+  const executeTreeDrop = (clientX, clientY) => {
+    const dragId = treeDragRef.current.cardId;
+    if (!dragId) return;
+    const hit = hitTestDropTarget(clientX, clientY, dragId);
+    if (hit) {
+      if (hit.pos === 'inside') {
+        moveMindMapCard(selectedBookId, dragId, hit.targetId);
+        setCollapsedNodes(prev => { const next = new Set(prev); next.delete(hit.targetId); return next; });
+      } else {
+        reorderMindMapCard(selectedBookId, dragId, hit.targetId, hit.pos === 'before');
+      }
+    }
   };
 
   const handleTreeTouchEnd = (e) => {
     clearTimeout(treeDragTimer.current);
     treeDragTimer.current = null;
     if (!treeDragRef.current.active) { clearTreeTouchDrag(); return; }
-    const dragId = treeDragRef.current.cardId;
     const t = e.changedTouches[0];
-    const el = document.elementFromPoint(t.clientX, t.clientY);
-    const node = el?.closest('.tree-node');
-    if (node) {
-      const targetId = node.dataset.cardId;
-      if (targetId && targetId !== dragId) {
-        const rect = node.getBoundingClientRect();
-        const y = t.clientY - rect.top;
-        const h = rect.height;
-        let pos = 'inside';
-        if (y < h * 0.25) pos = 'before';
-        else if (y > h * 0.75) pos = 'after';
-        if (pos === 'inside') {
-          moveMindMapCard(selectedBookId, dragId, targetId);
-          setCollapsedNodes(prev => { const next = new Set(prev); next.delete(targetId); return next; });
-        } else {
-          reorderMindMapCard(selectedBookId, dragId, targetId, pos === 'before');
-        }
-      }
-    }
+    executeTreeDrop(t.clientX, t.clientY);
     clearTreeTouchDrag();
   };
 
-  // document 级 touchmove/touchend：确保手指移到节点外也不丢事件
+  // document 级监听：手指移到节点外也不丢事件
   useEffect(() => {
     const onMove = (e) => {
       if (!treeDragRef.current.active) return;
       e.preventDefault();
       const t = e.touches[0];
       setTouchGhost(prev => prev ? { ...prev, x: t.clientX, y: t.clientY } : null);
-      updateTreeDropTarget(t.clientX, t.clientY, treeDragRef.current.cardId);
+      hitTestDropTarget(t.clientX, t.clientY, treeDragRef.current.cardId);
     };
     const onEnd = (e) => {
       if (!treeDragRef.current.active) return;
-      // 如果 touchend 的目标不是 tree-node（手指移到了外面），手动处理
-      const el = e.target;
-      if (!el.closest('.tree-node')) {
-        handleTreeTouchEnd(e);
-      }
+      const t = e.changedTouches[0];
+      executeTreeDrop(t.clientX, t.clientY);
+      clearTreeTouchDrag();
     };
     const onCancel = () => {
       if (treeDragRef.current.active) clearTreeTouchDrag();
@@ -1114,7 +1094,7 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
         );
       })()}
       {/* 触摸拖拽幽灵（树状模式） */}
-      {touchGhost && !touchGhost.hidden && (
+      {touchGhost && (
         <div className="touch-ghost" style={{ left: touchGhost.x - 40, top: touchGhost.y - 20 }}>
           {touchGhost.title?.slice(0, 8) || '拖拽中'}
         </div>
