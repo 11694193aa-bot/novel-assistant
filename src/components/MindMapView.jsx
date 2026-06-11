@@ -813,9 +813,15 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     `;
     const mw = menu.offsetWidth, mh = menu.offsetHeight;
     const vw = window.innerWidth, vh = window.innerHeight;
-    if (x + mw > vw) x = vw - mw - 10;
-    if (y + mh > vh) y = vh - mh - 10;
-    if (x < 5) x = 5; if (y < 5) y = 5;
+    if (isMobile) {
+      // 手机端居中弹出
+      x = (vw - mw) / 2;
+      y = (vh - mh) / 2;
+    } else {
+      if (x + mw > vw) x = vw - mw - 10;
+      if (y + mh > vh) y = vh - mh - 10;
+      if (x < 5) x = 5; if (y < 5) y = 5;
+    }
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
     menu.style.visibility = 'visible';
