@@ -134,12 +134,14 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
   // ==== 触摸拖拽（树状列表）====
   const treeTouchRef = useRef(null);
   const treeTouchTimerRef = useRef(null);
+  const treeTouchStartPos = useRef(null);
   const [touchGhost, setTouchGhost] = useState(null);
 
   const clearTreeTouchDrag = () => {
     clearTimeout(treeTouchTimerRef.current);
     treeTouchTimerRef.current = null;
     treeTouchRef.current = null;
+    treeTouchStartPos.current = null;
     setTreeDragId(null);
     setTouchGhost(null);
     setTreeDropTarget(null);
@@ -149,6 +151,7 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     if (e.touches.length > 1) return;
     clearTreeTouchDrag();
     const touch = e.touches[0];
+    treeTouchStartPos.current = { x: touch.clientX, y: touch.clientY };
     treeTouchTimerRef.current = setTimeout(() => {
       treeTouchRef.current = card.id;
       setTreeDragId(card.id);
@@ -157,8 +160,15 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
   };
   const handleTreeTouchMove = (e) => {
     if (!treeTouchRef.current) {
-      clearTimeout(treeTouchTimerRef.current);
-      treeTouchTimerRef.current = null;
+      // 手指移动超过 10px 才取消长按（允许微动）
+      if (treeTouchStartPos.current) {
+        const dx = e.touches[0].clientX - treeTouchStartPos.current.x;
+        const dy = e.touches[0].clientY - treeTouchStartPos.current.y;
+        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+          clearTimeout(treeTouchTimerRef.current);
+          treeTouchTimerRef.current = null;
+        }
+      }
       return;
     }
     const touch = e.touches[0];
