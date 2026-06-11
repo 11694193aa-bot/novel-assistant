@@ -22,6 +22,7 @@
     "@vitejs/plugin-react": "^4.2.0",
     "concurrently": "^8.2.0",
     "electron": "^22.3.27",
+    "puppeteer": "^25.1.0",
     "serve": "^14.2.6",
     "sharp": "^0.34.5",
     "vite": "^5.0.0",
