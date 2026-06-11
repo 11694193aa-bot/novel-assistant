@@ -98,7 +98,8 @@
       "Bash(curl -s -X POST \"https://8c3621ee.novel-assistant-drf.pages.dev/api/sync/save\" -H \"Content-Type: application/json\" -d \"@C:/Users/11694/restore-payload.json\")",
       "Bash(node -e \"const fs=require\\('fs'\\);let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('ok:',j.ok,'| books:',j.data?.books?.length,'| cards:',j.data?.inspirationCards?.length,'| convs:',j.data?.aiConversations?.length,'| trash:',j.data?.trash?.length\\)}\\)\")",
       "Bash(curl -s -X POST \"https://8c3621ee.novel-assistant-drf.pages.dev/api/sync/save\" -H \"Content-Type: application/json\" -d \"@C:/Users/11694/test-sync.json\")",
-      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('save ok, load: books='+j.data?.books?.length+' cards='+j.data?.inspirationCards?.length+' test='+j.data?._syncTest\\)}\\)\")"
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('save ok, load: books='+j.data?.books?.length+' cards='+j.data?.inspirationCards?.length+' test='+j.data?._syncTest\\)}\\)\")",
+      "Bash(git stash *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\11694\\AppData\\Local\\Temp",

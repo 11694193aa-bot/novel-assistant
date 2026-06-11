@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { saveData, loadData, saveSplash, loadSplash, removeSplash, isSyncing, flushCloudSync } from '../utils/storage';
+import { saveData, loadData, saveHistory, saveSplash, loadSplash, isSyncing } from '../utils/storage';
 
 // 生成唯一ID
 export const uid = () => crypto.randomUUID ? crypto.randomUUID() :
@@ -42,7 +42,6 @@ const useStore = create((set, get) => ({
     const data = await loadData(SAVE_KEY);
     // 独立加载开屏图
     const splashImage = loadSplash();
-    const fromCloud = data?._source === 'cloud';
     if (data) {
       set({
         books: data.books || [],
@@ -52,7 +51,6 @@ const useStore = create((set, get) => ({
         dailyCounts: data.dailyCounts || {},
         trash: data.trash || [],
         initialized: true,
-        toast: fromCloud ? { text: '已从云端同步数据', ts: Date.now() } : null,
       });
     } else {
       set({ initialized: true, settings: { ...defaultSettings, splashImage } });
@@ -61,23 +59,15 @@ const useStore = create((set, get) => ({
 
   // ============ 持久化 ============
   persist: async (silent = false) => {
-    if (!silent) set({ toast: { text: '正在保存...', ts: Date.now() } });
+    if (!silent) set({ toast: { text: '正在保存，请勿退出...', ts: Date.now() } });
     const { books, inspirationCards, aiConversations, settings, dailyCounts, trash } = get();
     const { splashImage, ...settingsWithoutSplash } = settings;
     const data = { books, inspirationCards, aiConversations, settings: settingsWithoutSplash, dailyCounts, trash };
-    // 先写本地 IndexedDB（saveData 内部），再立即云同步（不等 15 秒防抖）
     await saveData(SAVE_KEY, data);
-    // splashImage 独立存储（不进主数据同步流）
-    if (splashImage) {
-      saveSplash(splashImage);
-    } else {
-      removeSplash();
-    }
-    // 立即触发云同步，不依赖防抖定时器
-    const stamped = { ...data, _updatedAt: Date.now() };
-    const ok = await flushCloudSync(stamped);
+    if (splashImage) saveSplash(splashImage); else { try { localStorage.removeItem('novel_splash'); } catch (_) {} }
+    await saveHistory(SAVE_KEY, data, Date.now());
     set({ dirty: false });
-    if (!silent) set({ toast: { text: ok ? '已同步到云端' : '已保存到本地', ts: Date.now() } });
+    if (!silent) set({ toast: { text: '已同步到云端', ts: Date.now() } });
   },
 
   markDirty: () => set({ dirty: true }),

@@ -1,61 +1,40 @@
 import { cloudSave, cloudLoad } from './webdav';
 import { idbSet, idbGet, idbDelete, idbKeys } from './idb';
 
-// ========== 同步锁 & 防抖 ==========
+// ========== 同步锁 ==========
 let _syncing = false;
-let _syncTimer = null;
-const CLOUD_DEBOUNCE_MS = 15_000; // 15 秒内合并为一次云同步
-
 export function isSyncing() { return _syncing; }
 function lockSync() { _syncing = true; }
 function unlockSync() { _syncing = false; }
-
-function scheduleCloudSync(stamped) {
-  clearTimeout(_syncTimer);
-  _syncTimer = setTimeout(() => flushCloudSync(stamped), CLOUD_DEBOUNCE_MS);
-}
-
-// 立即云同步（persist 手动保存调用，不等防抖）
-export async function flushCloudSync(stamped) {
-  clearTimeout(_syncTimer);
-  if (_syncing) return false;
-  _syncing = true;
-  try {
-    const icons = stamped.settings?.customIcons || {};
-    const cloudPayload = {
-      ...stamped,
-      settings: { ...(stamped.settings || {}), customIcons: undefined },
-      icons,
-    };
-    await Promise.race([cloudSave(cloudPayload), new Promise(r => setTimeout(() => r(false), 8000))]);
-    return true;
-  } catch (e) {
-    console.error('云端同步失败:', e.message);
-    return false;
-  } finally {
-    _syncing = false;
-  }
-}
 
 // ========== 核心存储（IndexedDB为主，localStorage降级） ==========
 
 export async function saveData(key, data) {
   // 加时间戳
   const stamped = { ...data, _updatedAt: Date.now() };
-  // 写入 IndexedDB（立即写，本地速度快）
+  // 写入 IndexedDB
   try {
     await idbSet(`novel_${key}`, stamped);
   } catch (e) {
     console.error('IndexedDB 写入失败:', e.message);
   }
-  // 本地历史版本（不等云同步）
-  try {
-    await saveHistory(key, stamped, stamped._updatedAt);
-  } catch (e) {
-    console.error('本地历史写入失败:', e.message);
+  // 异步推送到云端（不阻塞）
+  if (!_syncing) {
+    _syncing = true;
+    try {
+      const icons = stamped.settings?.customIcons || {};
+      const cloudPayload = {
+        ...stamped,
+        settings: { ...(stamped.settings || {}), customIcons: undefined }, // 不在data里存大图
+        icons, // 单独key传输每个图标
+      };
+      await Promise.race([cloudSave(cloudPayload), new Promise(r => setTimeout(() => r(false), 8000))]);
+    } catch (e) {
+      console.error('云端同步失败:', e.message);
+    } finally {
+      _syncing = false;
+    }
   }
-  // 云同步：防抖，避免高频请求风暴
-  scheduleCloudSync(stamped);
 }
 
 export async function loadData(key) {
@@ -89,7 +68,7 @@ export async function loadData(key) {
 
   if (cloudTs > localTs) {
     try { await idbSet(`novel_${key}`, cloudData); } catch (_) {}
-    return { ...cloudData, _source: 'cloud' }; // 标记数据来源，用于提示用户
+    return cloudData;
   }
 
   if (localTs > cloudTs) {

@@ -83,6 +83,14 @@ export default function App() {
 
   useEffect(() => { init(); }, []);
 
+  // App 启动时同步云端并提示
+  useEffect(() => {
+    if (initialized) {
+      const { showToast } = useStore.getState();
+      showToast('已从云端同步数据');
+    }
+  }, [initialized]);
+
   useEffect(() => {
     if (books.length > 0 && !selectedBookId) setSelectedBookId(books[0].id);
   }, [books, selectedBookId]);
@@ -191,7 +199,7 @@ export default function App() {
             </MobileFullPage>
           ) : (
             <MobileFullPage title="思维导图" onBack={() => setActiveTab('directory')}
-              actions={<><button className="tb-btn" onClick={() => document.querySelector('.btn-add-card')?.click()} title="新建母卡片" style={{fontSize:18,fontWeight:700,padding:'2px 8px'}}>＋</button><button className="tb-btn" onClick={() => document.querySelector('.btn-import')?.click()} title="导入文件" style={{fontSize:15,padding:'2px 8px'}}>📥</button></>}>
+              actions={<><button className="tb-btn" onClick={() => document.querySelector('.btn-add-card')?.click()}>+母卡片</button><button className="tb-btn" onClick={() => document.querySelector('.btn-import')?.click()}>导入</button></>}>
               <Suspense fallback={<Loader />}><MindMapView books={books} selectedBookId={selectedBookId} onSelectBook={setSelectedBookId}
                 onFocusCard={setMindmapDrillId} isMobile /></Suspense>
             </MobileFullPage>

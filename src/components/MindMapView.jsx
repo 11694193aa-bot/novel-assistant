@@ -140,15 +140,19 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     clearTimeout(treeTouchTimerRef.current);
     treeTouchTimerRef.current = null;
     treeTouchRef.current = null;
+    treeTouchStartPos.current = null;
     setTreeDragId(null);
     setTouchGhost(null);
     setTreeDropTarget(null);
   };
 
+  const treeTouchStartPos = useRef(null);
+
   const handleTreeTouchStart = (e, card) => {
     if (e.touches.length > 1) return;
     clearTreeTouchDrag();
     const touch = e.touches[0];
+    treeTouchStartPos.current = { x: touch.clientX, y: touch.clientY };
     treeTouchTimerRef.current = setTimeout(() => {
       treeTouchRef.current = card.id;
       setTreeDragId(card.id);
@@ -157,8 +161,15 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
   };
   const handleTreeTouchMove = (e) => {
     if (!treeTouchRef.current) {
-      clearTimeout(treeTouchTimerRef.current);
-      treeTouchTimerRef.current = null;
+      // 手指移动超过10px才取消长按（允许微动）
+      if (treeTouchStartPos.current) {
+        const dx = e.touches[0].clientX - treeTouchStartPos.current.x;
+        const dy = e.touches[0].clientY - treeTouchStartPos.current.y;
+        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+          clearTimeout(treeTouchTimerRef.current);
+          treeTouchTimerRef.current = null;
+        }
+      }
       return;
     }
     const touch = e.touches[0];
@@ -571,19 +582,19 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
           )}
           <span className="tree-menu-handle"
             onClick={(e) => { e.stopPropagation(); showMenu(e); }}
-            onTouchStart={(e) => { e.stopPropagation(); }}
-            onTouchMove={(e) => { e.stopPropagation(); }}
             onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); showMenu(e); }}
             title="菜单">⋯</span>
           {isEditing ? (
             <>
-              <textarea className="tree-edit-content" defaultValue={card.content || ''} placeholder="输入内容..." autoFocus onKeyDown={handleEditKeyDown} onInput={handleTextareaInput} onBlur={saveEdit} ref={textareaInitRef} />
+              <input className="tree-edit-title" defaultValue={card.title || ''} placeholder="标题..." autoFocus onKeyDown={handleEditKeyDown} onBlur={saveEdit} />
+              <textarea className="tree-edit-content" defaultValue={card.content || ''} placeholder="内容..." onKeyDown={handleEditKeyDown} onInput={handleTextareaInput} onBlur={saveEdit} ref={textareaInitRef} />
               <div className="tree-edit-hint">Ctrl+Enter 保存 · 点击外自动保存</div>
             </>
           ) : (
             <>
+              {hasTitle && <div className="tree-node-title">{card.title}</div>}
               {hasContent && <div className="tree-node-content" style={{whiteSpace:'pre-wrap'}}>{card.content}</div>}
-              {!hasContent && (
+              {!hasTitle && !hasContent && (
                 <div className="tree-node-empty">双击编辑 · 悬停+建子节点</div>
               )}
             </>
@@ -813,14 +824,9 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     `;
     const mw = menu.offsetWidth, mh = menu.offsetHeight;
     const vw = window.innerWidth, vh = window.innerHeight;
-    if (isMobile) {
-      x = (vw - mw) / 2;
-      y = (vh - mh) / 2;
-    } else {
-      if (x + mw > vw) x = vw - mw - 10;
-      if (y + mh > vh) y = vh - mh - 10;
-      if (x < 5) x = 5; if (y < 5) y = 5;
-    }
+    if (x + mw > vw) x = vw - mw - 10;
+    if (y + mh > vh) y = vh - mh - 10;
+    if (x < 5) x = 5; if (y < 5) y = 5;
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
     menu.style.visibility = 'visible';
@@ -968,11 +974,11 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
             <span className="mm-action-icon"><CatIcon name="focus" size={20} /></span>
             <span className="mm-action-label">专注</span>
           </button>
-          <button className="mm-action-btn btn-import" onClick={() => fileInputRef.current?.click()} disabled={!selectedBookId} title="导入文件">
+          <button className="mm-action-btn" onClick={() => fileInputRef.current?.click()} disabled={!selectedBookId} title="导入文件">
             <span className="mm-action-icon"><CatIcon name="import" size={20} /></span>
             <span className="mm-action-label">导入</span>
           </button>
-          <button className="mm-action-btn btn-add-card" onClick={handleAddParent} disabled={!selectedBookId} title="新建母卡片">
+          <button className="mm-action-btn" onClick={handleAddParent} disabled={!selectedBookId} title="新建母卡片">
             <span className="mm-action-icon"><CatIcon name="add" size={20} /></span>
             <span className="mm-action-label">添加</span>
           </button>

@@ -335,7 +335,7 @@ export default function MobileStack({
                 style={{background:bookBatchMode?'var(--pink)':'var(--pink3)',color:bookBatchMode?'#fff':'var(--text)',fontWeight:800,fontSize:bookBatchMode?16:20}}>
                 {bookBatchMode ? '✕' : '☰'}
               </button>
-              {!bookBatchMode && <button className="ms-header-btn" onClick={handleAddBook} style={{fontSize:18,padding:'6px 8px'}}>
+              {!bookBatchMode && <button className="ms-header-btn" onClick={handleAddBook} style={{fontSize:22}}>
                 ＋
               </button>}
             </div>
@@ -424,7 +424,7 @@ export default function MobileStack({
                 style={{background:batchMode?'var(--pink)':'var(--pink3)',color:batchMode?'#fff':'var(--text)',fontWeight:800,fontSize:batchMode?16:20}}>
                 {batchMode ? '✕' : '☰'}
               </button>
-              {!batchMode && <button className="ms-header-btn" onClick={() => handleAddChapter()} style={{fontSize:18,padding:'6px 8px'}}>
+              {!batchMode && <button className="ms-header-btn" onClick={() => handleAddChapter()} style={{fontSize:22}}>
                 ＋
               </button>}
             </div>
