@@ -104,7 +104,8 @@
       "Bash(curl -s \"http://localhost:5199/\")",
       "Bash(npx puppeteer *)",
       "Bash(node test-drag.mjs)",
-      "Bash(node test-drag.cjs)"
+      "Bash(node test-drag.cjs)",
+      "Bash(npm uninstall *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\11694\\AppData\\Local\\Temp",
