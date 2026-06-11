@@ -16,14 +16,13 @@ export async function onRequest({ request, env }) {
     }
 
     const systemPrompt = chapterContent
-      ? `你是一个有洞察力的写作伙伴。以下是用户正在写作的章节内容：\n---\n${chapterContent.substring(0, 80000)}\n---\n请基于以上内容进行深度对话，讨论情节发展、人设塑造、文笔技巧等。使用中文回复，语气温暖友善。`
-      : '你是一个有洞察力的写作伙伴。帮助作者激发灵感，讨论情节、人设、文笔等。使用中文回复，语气温暖友善。';
+      ? `你是一位资深网文编辑。以下是你正在审阅的作品章节：\n---\n${chapterContent.substring(0, 80000)}\n---\n规则：只提问，不修改原文，不批评，不建议。`
+      : '你是一位资深网文编辑。规则：只提问，不修改原文，不批评，不建议。';
 
-    // 无消息历史 → 生成初始问题
     if (!messages || messages.length === 0) {
       const userMsg = chapterContent
-        ? '请基于以上章节内容，生成3-5个有深度的问题来激发作者的思考和创作灵感。每个问题单独一行，以"Q: "开头。'
-        : '请生成3-5个通用写作思考问题，帮助作者激发灵感。每个问题单独一行，以"Q: "开头。';
+        ? '请基于以上章节，提出3个值得作者思考的问题。每个问题以"Q: "开头独占一行。'
+        : '请提出3个通用网文写作思考问题。每个问题以"Q: "开头独占一行。';
 
       const resp = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',

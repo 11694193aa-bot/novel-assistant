@@ -1,22 +1,22 @@
 import React, { useState, useRef } from 'react';
 import useStore from '../store';
-import Icon from './Icon';
+import CatIcon, { CatIconButton } from './CatIcon';
 
 const mainTabs = [
-  { key: 'directory', icon: 'book', label: '书籍目录' },
+  { key: 'directory', icon: 'books', label: '书籍目录' },
   { key: 'mindmap', icon: 'mindmap', label: '思维导图' },
-  { key: 'inspiration', icon: 'lightbulb', label: '灵感卡片' },
-  { key: 'aichat', icon: 'search', label: 'AI 对话' },
-  { key: 'history', icon: 'clock', label: '历史版本' },
+  { key: 'inspiration', icon: 'inspiration', label: '灵感卡片' },
+  { key: 'aichat', icon: 'aichat', label: 'AI 对话' },
+  { key: 'history', icon: 'calendar', label: '历史版本' },
   { key: 'settings', icon: 'settings', label: '设置' },
 ];
 
 const funItems = [
-  { key: 'quicknote', icon: 'quicknote', label: '文字速记' },
-  { key: 'filmnote', icon: 'film', label: '拉片速记' },
-  { key: 'gacha', icon: 'gacha', label: '扭蛋机' },
-  { key: 'calendar', icon: 'calendar', label: '字数日历' },
-  { key: 'trash', icon: 'trash', label: '回收站' },
+  { key: 'quicknote', icon: 'quicknote', label: '速记阁' },
+  { key: 'filmnote', icon: 'filmnote', label: '拉片室' },
+  { key: 'gacha', icon: 'gacha', label: '扭蛋屋' },
+  { key: 'calendar', icon: 'calendar', label: '日历记' },
+  { key: 'trash', icon: 'trash', label: '清理站' },
 ];
 
 // 全局文件输入（和Icon组件共用同一个）
@@ -78,7 +78,7 @@ export default function NavBar({ activeTab, onTabChange, onGachaClick, onQuickNo
           {settings.avatar ? (
             <img src={settings.avatar} alt="" style={{width:28,height:28,borderRadius:'50%',objectFit:'cover',pointerEvents:'none'}} />
           ) : (
-            <Icon name="brand" size={28} />
+            <CatIconButton name="brand" size={28} />
           )}
         </span>
         <div className="nav-brand-text">
@@ -95,7 +95,7 @@ export default function NavBar({ activeTab, onTabChange, onGachaClick, onQuickNo
             onClick={() => onTabChange(tab.key)}
             title={collapsed ? tab.label : ''}
           >
-            <Icon name={tab.icon} size={20} />
+            <CatIconButton name={tab.icon} size={20} />
             <span className="tab-label">{tab.label}</span>
           </button>
         ))}
@@ -120,15 +120,15 @@ export default function NavBar({ activeTab, onTabChange, onGachaClick, onQuickNo
             }}
             title={collapsed ? item.label : ''}
           >
-            <Icon name={item.icon} size={19} />
+            <CatIconButton name={item.icon} size={19} />
             <span className="tab-label">{item.label}</span>
           </button>
         ))}
       </div>
 
       {/* 保存到云端按钮 */}
-      <button className="nav-save-btn" onClick={() => { useStore.getState().persist(); console.log('💾 已保存到云端'); }} title="保存到云端 (Ctrl+Shift+S)">
-        💾 <span className="tab-label">保存</span>
+      <button className="nav-save-btn" onClick={() => { useStore.getState().persist(); }} title="保存到云端 (Ctrl+Shift+S)">
+        <CatIcon name="import" size={16} /> <span className="tab-label">保存</span>
       </button>
       {/* 收起按钮 */}
       <button className="nav-collapse-btn" onClick={() => setCollapsed(!collapsed)} title={collapsed ? '展开' : '收起'}>

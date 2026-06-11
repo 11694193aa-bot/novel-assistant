@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState, lazy, Suspense } from 'react';
+import React, { useEffect, useRef, useCallback, useState, useMemo, lazy, Suspense } from 'react';
 import useStore from './store';
 import NavBar from './components/NavBar';
 import DirectoryView from './components/DirectoryView';
@@ -29,6 +29,24 @@ const Loader = () => {
   </div>;
 };
 
+const fontMap = {
+  font1: '"Microsoft YaHei","PingFang SC",sans-serif',
+  font2: '"SimSun","Noto Serif SC",serif',
+  font3: '"KaiTi","STKaiti",serif',
+  font4: '"SimHei","PingFang SC",sans-serif',
+  font5: '"DengXian","PingFang SC",sans-serif',
+  font6: '"FangSong","STFangsong",serif',
+  font7: '"Rounded Mplus 1c","Microsoft YaHei",sans-serif',
+  font8: '"ZCOOL KuaiLe","Comic Sans MS",cursive',
+};
+
+function hexToRgba(hex, opacity) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${opacity})`;
+}
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
   useEffect(() => {
@@ -44,7 +62,7 @@ function useIsMobile() {
 }
 
 export default function App() {
-  const { initialized, init, persist, dirty, settings, books, inspirationCards } = useStore();
+  const { initialized, init, persist, dirty, settings, books, inspirationCards, toast, clearToast } = useStore();
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState('directory');
   const [gachaOpen, setGachaOpen] = useState(false);
@@ -56,12 +74,44 @@ export default function App() {
   const [selectedChapterId, setSelectedChapterId] = useState(null);
   const [mindmapDrillId, setMindmapDrillId] = useState(null);
   const [inspDrillId, setInspDrillId] = useState(null);
+  const [inspCount, setInspCount] = useState(0);
+
+  const selectedChapter = useMemo(() => {
+    if (!selectedChapterId || !selectedBookId) return null;
+    return books.find(b => b.id === selectedBookId)?.chapters?.find(c => c.id === selectedChapterId) || null;
+  }, [books, selectedBookId, selectedChapterId]);
 
   useEffect(() => { init(); }, []);
+
+  // App 启动时同步云端并提示
+  useEffect(() => {
+    if (initialized) {
+      const { showToast } = useStore.getState();
+      showToast('已从云端同步数据');
+    }
+  }, [initialized]);
 
   useEffect(() => {
     if (books.length > 0 && !selectedBookId) setSelectedBookId(books[0].id);
   }, [books, selectedBookId]);
+
+  // 切换回目录时自动保存并同步云端
+  const prevTabRef = useRef(activeTab);
+  useEffect(() => {
+    const prev = prevTabRef.current;
+    prevTabRef.current = activeTab;
+    const contentTabs = ['mindmap', 'inspiration', 'aichat', 'settings'];
+    if (activeTab === 'directory' && contentTabs.includes(prev) && dirty) {
+      persist();
+    }
+  }, [activeTab]);
+
+  // Toast 自动消失
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => clearToast(), 2500);
+    return () => clearTimeout(t);
+  }, [toast?.ts]);
 
   // 每8秒自动保存
   const dirtyRef = useRef(dirty);
@@ -95,24 +145,10 @@ export default function App() {
   }, []);
 
 
-  const fontMap = {
-    font1: '"Microsoft YaHei","PingFang SC",sans-serif',
-    font2: '"SimSun","Noto Serif SC",serif',
-    font3: '"KaiTi","STKaiti",serif',
-    font4: '"SimHei","PingFang SC",sans-serif',
-    font5: '"DengXian","PingFang SC",sans-serif',
-    font6: '"FangSong","STFangsong",serif',
-    font7: '"Rounded Mplus 1c","Microsoft YaHei",sans-serif',
-    font8: '"ZCOOL KuaiLe","Comic Sans MS",cursive',
-  };
-
-  const fontColorRgba = (() => {
-    const hex = settings.fontColor || '#4a3728';
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r},${g},${b},${settings.fontOpacity ?? 0.92})`;
-  })();
+  const fontColorRgba = useMemo(
+    () => hexToRgba(settings.fontColor || '#4a3728', settings.fontOpacity ?? 0.92),
+    [settings.fontColor, settings.fontOpacity]
+  );
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', settings.theme || 'warm');
@@ -157,13 +193,13 @@ export default function App() {
         {/* 思维导图全屏页 */}
         {activeTab === 'mindmap' && (
           mindmapDrillId ? (
-            <MobileFullPage title="🧠 思维导图" onBack={() => setMindmapDrillId(null)}>
+            <MobileFullPage title="思维导图" onBack={() => setMindmapDrillId(null)}>
               <Suspense fallback={<Loader />}><MindMapView books={books} selectedBookId={selectedBookId} onSelectBook={setSelectedBookId}
                 focusCardId={mindmapDrillId} onFocusCard={setMindmapDrillId} isMobile /></Suspense>
             </MobileFullPage>
           ) : (
-            <MobileFullPage title="🧠 思维导图" onBack={() => setActiveTab('directory')}
-              actions={<><button className="tb-btn" onClick={() => document.querySelector('.btn-add-card')?.click()}>+母卡片</button><button className="tb-btn" onClick={() => document.querySelector('.btn-import')?.click()}>📥导入</button></>}>
+            <MobileFullPage title="思维导图" onBack={() => setActiveTab('directory')}
+              actions={<><button className="tb-btn" onClick={() => document.querySelector('.btn-add-card')?.click()}>+母卡片</button><button className="tb-btn" onClick={() => document.querySelector('.btn-import')?.click()}>导入</button></>}>
               <Suspense fallback={<Loader />}><MindMapView books={books} selectedBookId={selectedBookId} onSelectBook={setSelectedBookId}
                 onFocusCard={setMindmapDrillId} isMobile /></Suspense>
             </MobileFullPage>
@@ -173,28 +209,28 @@ export default function App() {
         {/* 灵感卡片全屏页 */}
         {activeTab === 'inspiration' && (
           inspDrillId ? (
-            <MobileFullPage title="💡 灵感卡片" onBack={() => setInspDrillId(null)}>
-              <Suspense fallback={<Loader />}><InspirationView books={books} drillCardId={inspDrillId} onBack={() => setInspDrillId(null)} /></Suspense>
+            <MobileFullPage title="灵感卡片" count={inspCount} onBack={() => setInspDrillId(null)}>
+              <Suspense fallback={<Loader />}><InspirationView books={books} drillCardId={inspDrillId} onBack={() => setInspDrillId(null)} onCountChange={setInspCount} /></Suspense>
             </MobileFullPage>
           ) : (
-            <MobileFullPage title="💡 灵感卡片" onBack={() => setActiveTab('directory')}
-              actions={<><button className="tb-btn" onClick={() => document.querySelector('.inspiration-filter .btn-create-inspiration')?.click()}>+新卡片</button><button className="tb-btn" onClick={() => document.getElementById('insp-import-file')?.click()}>📥导入</button></>}>
-              <Suspense fallback={<Loader />}><InspirationView books={books} onDrillCard={setInspDrillId} isMobile /></Suspense>
+            <MobileFullPage title="灵感卡片" count={inspCount} onBack={() => setActiveTab('directory')}
+              actions={<><button className="tb-btn" onClick={() => document.getElementById('insp-import-file')?.click()}>导入</button></>}>
+              <Suspense fallback={<Loader />}><InspirationView books={books} onDrillCard={setInspDrillId} isMobile onCountChange={setInspCount} /></Suspense>
             </MobileFullPage>
           )
         )}
 
         {/* AI 对话全屏页 */}
         {activeTab === 'aichat' && (
-          <MobileFullPage title="🤖 AI 对话" onBack={() => setActiveTab('directory')}>
-            <Suspense fallback={<Loader />}><AIChatView chapterContent={selectedChapterId ? books.find(b=>b.id===selectedBookId)?.chapters?.find(c=>c.id===selectedChapterId)?.content : null}
-              chapterTitle={selectedChapterId ? books.find(b=>b.id===selectedBookId)?.chapters?.find(c=>c.id===selectedChapterId)?.title : null} /></Suspense>
+          <MobileFullPage title="AI 对话" onBack={() => setActiveTab('directory')}>
+            <Suspense fallback={<Loader />}><AIChatView chapterContent={selectedChapter?.content || null}
+              chapterTitle={selectedChapter?.title || null} /></Suspense>
           </MobileFullPage>
         )}
 
         {/* 设置全屏页 */}
         {activeTab === 'settings' && (
-          <MobileFullPage title="⚙️ 设置" onBack={() => setActiveTab('directory')}>
+          <MobileFullPage title="设置" onBack={() => setActiveTab('directory')}>
             <Suspense fallback={<Loader />}><SettingsPanel /></Suspense>
           </MobileFullPage>
         )}
@@ -208,6 +244,8 @@ export default function App() {
             <div className="cal-modal"><button className="modal-close" onClick={() => setCalendarOpen(false)}>✕</button><CalendarView /></div></div>}
           {trashOpen && <TrashView onClose={() => setTrashOpen(false)} />}
         </Suspense>
+        {/* Toast 提示 */}
+        {toast && <div className="toast-bar">{toast.text}</div>}
       </div>
     );
   }
@@ -233,8 +271,8 @@ export default function App() {
           {activeTab === 'directory' && <DirectoryView selectedBookId={selectedBookId} selectedChapterId={selectedChapterId}
             onSelectBook={setSelectedBookId} onSelectChapter={setSelectedChapterId} onCalendarClick={() => setCalendarOpen(true)} />}
           {activeTab === 'settings' && <SettingsPanel />}
-          {activeTab === 'aichat' && <AIChatView chapterContent={selectedChapterId ? books.find(b=>b.id===selectedBookId)?.chapters?.find(c=>c.id===selectedChapterId)?.content : null}
-            chapterTitle={selectedChapterId ? books.find(b=>b.id===selectedBookId)?.chapters?.find(c=>c.id===selectedChapterId)?.title : null} />}
+          {activeTab === 'aichat' && <AIChatView chapterContent={selectedChapter?.content || null}
+            chapterTitle={selectedChapter?.title || null} />}
           {activeTab === 'history' && <DiffViewer books={books} inspirationCards={inspirationCards} />}
         </Suspense>
       </div>
@@ -247,6 +285,7 @@ export default function App() {
           <div className="cal-modal"><button className="modal-close" onClick={() => setCalendarOpen(false)}>✕</button><CalendarView /></div></div>}
         {trashOpen && <TrashView onClose={() => setTrashOpen(false)} />}
       </Suspense>
+      {toast && <div className="toast-bar">{toast.text}</div>}
     </div>
   );
 }

@@ -66,7 +66,7 @@ export default function GachaMachine({ books, onClose }) {
       <div className="gacha-modal">
         <button className="modal-close" onClick={onClose}>✕</button>
         <div className="gacha-header">
-          <span className="gacha-title">🎰 灵感扭蛋机</span>
+          <span className="gacha-title"> 灵感扭蛋机</span>
           <span className="gacha-subtitle">~ 转动扭蛋，获取灵感喵 ~</span>
         </div>
 
@@ -74,13 +74,13 @@ export default function GachaMachine({ books, onClose }) {
           <div className={`gacha-display ${rolling ? 'rolling' : ''}`}>
             {currentQuestion ? (
               <div className="gacha-question">
-                <span className="gacha-cat-big">🐱</span>
+                <span className="gacha-cat-big"></span>
                 <span className="gacha-q-cat">{currentQuestion.category}</span>
                 <p className="gacha-q-text">{currentQuestion.text}</p>
               </div>
             ) : (
               <div className="gacha-placeholder">
-                <span className="gacha-cat-anim">🐱</span>
+                <span className="gacha-cat-anim"></span>
                 <p>点击下方按钮扭蛋~</p>
               </div>
             )}
@@ -100,7 +100,7 @@ export default function GachaMachine({ books, onClose }) {
                   💾 保存到灵感卡片
                 </button>
                 <div className="gacha-classify">
-                  <span>📚 或分类到:</span>
+                  <span>或分类到:</span>
                   {books.map(b => (
                     <button key={b.id} className="btn btn-classify" onClick={() => handleSaveAndClassify(b.id)}>
                       {b.title}
@@ -116,7 +116,7 @@ export default function GachaMachine({ books, onClose }) {
         </div>
 
         <button className="btn btn-roll" onClick={roll} disabled={rolling}>
-          {rolling ? '🎰 扭蛋中...' : '🎰 扭一下!'}
+          {rolling ? ' 扭蛋中...' : ' 扭一下!'}
         </button>
       </div>
     </div>

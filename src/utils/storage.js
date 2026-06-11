@@ -22,7 +22,13 @@ export async function saveData(key, data) {
   if (!_syncing) {
     _syncing = true;
     try {
-      await Promise.race([cloudSave(stamped), new Promise(r => setTimeout(() => r(false), 8000))]);
+      const icons = stamped.settings?.customIcons || {};
+      const cloudPayload = {
+        ...stamped,
+        settings: { ...(stamped.settings || {}), customIcons: undefined }, // 不在data里存大图
+        icons, // 单独key传输每个图标
+      };
+      await Promise.race([cloudSave(cloudPayload), new Promise(r => setTimeout(() => r(false), 8000))]);
     } catch (e) {
       console.error('云端同步失败:', e.message);
     } finally {
@@ -48,30 +54,23 @@ export async function loadData(key) {
     console.error('云端读取失败:', e.message);
   }
 
-  // 3. 时间戳冲突解决
+  // 3. 时间戳冲突解决：谁新谁赢（删改后的数据不会被旧数据覆盖）
   const localTs = localData?._updatedAt || 0;
   const cloudTs = cloudData?._updatedAt || 0;
-  const localBooks = (localData?.books || []).length;
-  const cloudBooks = (cloudData?.books || []).length;
 
-  // 无本地 → 用云端
-  if (!localData || localBooks === 0) {
-    if (cloudData && cloudBooks > 0) {
+  if (!localData || localTs === 0) {
+    if (cloudData && cloudTs > 0) {
       try { await idbSet(`novel_${key}`, cloudData); } catch (_) {}
       return cloudData;
     }
     return localData || cloudData || null;
   }
 
-  // 云端更新且内容不少于本地 → 云端覆盖本地（防数据量异常减少）
-  const localItems = (localData?.inspirationCards || []).length + (localData?.aiConversations || []).length;
-  const cloudItems = (cloudData?.inspirationCards || []).length + (cloudData?.aiConversations || []).length;
-  if (cloudTs > localTs && cloudBooks > 0 && cloudItems >= localItems) {
+  if (cloudTs > localTs) {
     try { await idbSet(`novel_${key}`, cloudData); } catch (_) {}
     return cloudData;
   }
 
-  // 本地更新 → 推送到云端
   if (localTs > cloudTs) {
     cloudSave(localData).catch(() => {});
   }

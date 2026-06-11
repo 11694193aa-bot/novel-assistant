@@ -132,7 +132,7 @@ export default function DiffViewer({ books, inspirationCards, target, onClose })
               className={`diff-tab ${viewMode === 'inspiration' ? 'active' : ''}`}
               onClick={() => setViewMode('inspiration')}
             >
-              💡 灵感对比
+               灵感对比
             </button>
           </div>
         </div>
@@ -166,7 +166,7 @@ export default function DiffViewer({ books, inspirationCards, target, onClose })
                   className={`diff-version-item ${selectedVersion?.timestamp === v.timestamp ? 'active' : ''}`}
                   onClick={() => handleCompare(v)}
                 >
-                  <span className="version-cat">🐱</span>
+                  <span className="version-cat"></span>
                   <span>{v.label}</span>
                 </div>
               ))
@@ -175,7 +175,7 @@ export default function DiffViewer({ books, inspirationCards, target, onClose })
 
           <div className="diff-result">
             {loading ? (
-              <div className="diff-loading">🐱 喵~ 正在加载对比...</div>
+              <div className="diff-loading"> 喵~ 正在加载对比...</div>
             ) : diffResult ? (
               <div className="diff-content">
                 <div className="diff-legend">
@@ -194,7 +194,7 @@ export default function DiffViewer({ books, inspirationCards, target, onClose })
               </div>
             ) : (
               <div className="diff-placeholder">
-                <span className="empty-cat">🐱</span>
+                <span className="empty-cat"></span>
                 <p>选择一个历史版本进行对比</p>
                 <p className="hint">不同的文字将以红色标亮显示</p>
               </div>

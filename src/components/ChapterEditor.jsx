@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import useStore from '../store';
+import CatIcon from './CatIcon';
 
 const INDENT = '　　';
 
@@ -18,6 +19,7 @@ export default function ChapterEditor({ bookId, chapter, books, onCalendarClick 
   const [formatBrush, setFormatBrush] = useState(null);
   const [importing, setImporting] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [showWordCount, setShowWordCount] = useState(false);
   const fileRef = useRef(null);
   const indentDoneRef = useRef(null);
 
@@ -286,20 +288,24 @@ export default function ChapterEditor({ bookId, chapter, books, onCalendarClick 
           <span className="tb-divider" />
           <button className="tb-btn" onClick={() => setShowFind(!showFind)}>🔍 查找替换</button>
           <span className="tb-divider" />
-          <button className="tb-btn" onClick={() => fileRef.current?.click()} disabled={importing}>
-            {importing ? '⏳' : '📥'} 导入
+          <button className="tb-btn" onClick={() => fileRef.current?.click()} disabled={importing} title="导入">
+            <CatIcon name="import" size={14} />
           </button>
           <span className="tb-divider" />
-          <button className={`tb-btn ${focusMode ? 'active' : ''}`} onClick={() => setFocusMode(!focusMode)}>
-            🧘 专注
+          <button className={`tb-btn ${focusMode ? 'active' : ''}`} onClick={() => setFocusMode(!focusMode)} title="专注模式">
+            <CatIcon name="focus" size={14} />
           </button>
         </div>
         <div className="toolbar-info">
-          本章:{wordCount}字 ·
-          <span className="today-count" onClick={onCalendarClick} title="点击查看字数日历">
-            📅 今日:{todayCount}字
-          </span>
-          {formatBrush !== null && <span className="brush-indicator"> 🖌 已复制</span>}
+          <button className="tb-btn" onClick={() => setShowWordCount(!showWordCount)} title="字数统计">
+            <CatIcon name="calendar" size={14} />
+          </button>
+          {showWordCount && (
+            <span className="word-count-pop" onClick={() => setShowWordCount(false)}>
+              本章:{wordCount}字 · 今日:{todayCount}字
+            </span>
+          )}
+          {formatBrush !== null && <span className="brush-indicator">已复制</span>}
         </div>
       </div>
 
@@ -353,10 +359,10 @@ export default function ChapterEditor({ bookId, chapter, books, onCalendarClick 
           </div>
           <div className="extract-preview">{selectedText.slice(0, 100)}{selectedText.length > 100 ? '...' : ''}</div>
           <div className="extract-actions">
-            <button onClick={() => handleExtract(bookId)}>📚 当前书籍</button>
-            <button onClick={() => handleExtract(null)}>💡 通用灵感</button>
+            <button onClick={() => handleExtract(bookId)}>当前书籍</button>
+            <button onClick={() => handleExtract(null)}> 通用灵感</button>
             {books.filter(b => b.id !== bookId).map(b => (
-              <button key={b.id} onClick={() => handleExtract(b.id)}>📘 {b.title}</button>
+              <button key={b.id} onClick={() => handleExtract(b.id)}> {b.title}</button>
             ))}
           </div>
         </div>

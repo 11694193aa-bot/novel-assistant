@@ -2,10 +2,10 @@ import React from 'react';
 import useStore from '../store';
 
 const TYPE_LABELS = {
-  book: '📘 书籍',
+  book: ' 书籍',
   chapter: '📄 章节',
-  inspirationCard: '💡 灵感卡片',
-  mindMapCard: '🧠 思维导图卡片',
+  inspirationCard: ' 灵感卡片',
+  mindMapCard: ' 思维导图卡片',
 };
 
 export default function TrashView({ onClose }) {

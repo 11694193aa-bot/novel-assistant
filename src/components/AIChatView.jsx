@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import useStore from '../store';
+import CatIcon from './CatIcon';
 
 const CATEGORIES = ['人设思考', '情节构思', '世界观', '感情线', '文笔提升', '灵感火花', '章节笔记'];
 
@@ -154,6 +155,9 @@ export default function AIChatView({ chapterContent, chapterTitle }) {
       } else text = await file.text();
       if (!text.trim()) { alert('未能提取文本'); setUploading(false); return; }
       setBookContent(text); setBookTitle(file.name.replace(/\.[^.]+$/, ''));
+      // 上传后自动生成问题
+      const data = await callAI([], text);
+      if (data) { setMessages([{ role: 'assistant', content: data.content }]); setQuestions(data.questions || []); }
     } catch (err) { alert('导入失败: ' + err.message); }
     setUploading(false);
   };
@@ -211,7 +215,7 @@ export default function AIChatView({ chapterContent, chapterTitle }) {
     return (
       <div className="chat-view">
         <div className="chat-key-setup">
-          <h3>🤖 配置 AI 对话</h3>
+          <h3><CatIcon name="aichat" size={20} /> 配置 AI 对话</h3>
           <p>请输入你的 DeepSeek API Key</p>
           <input type="password" placeholder="sk-..." value={apiKey} onChange={e => setApiKey(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveApiKey()} />
           <button onClick={saveApiKey} disabled={!apiKey.trim()}>💾 保存</button>
@@ -225,18 +229,18 @@ export default function AIChatView({ chapterContent, chapterTitle }) {
     return (
       <div className="chat-view">
         <div className="chat-toolbar">
-          <span className="chat-toolbar-title">🃏 灵感卡片 ({userCards.length})</span>
+          <span className="chat-toolbar-title"><CatIcon name="cards" size={16} /> 灵感卡片 ({userCards.length})</span>
           <div style={{ display: 'flex', gap: 4 }}>
             <button className="tb-btn" onClick={() => { if (selectedCards.size === userCards.length) setSelectedCards(new Set()); else setSelectedCards(new Set(userCards.map(c => c._cid))); }}>
               {selectedCards.size === userCards.length ? '取消全选' : '全选'}
             </button>
             {selectedCards.size > 0 && (
               <button className="tb-btn" style={{ color: '#fff', background: '#e74c3c', fontWeight: 700 }} onClick={deleteSelected}>
-                🗑 删除({selectedCards.size})
+                <CatIcon name="trash" size={12} /> 删除({selectedCards.size})
               </button>
             )}
-            <button className="tb-btn" onClick={exportCards}>📥 导出</button>
-            <button className="tb-btn" onClick={() => setCardMode(false)}>💬 返回对话</button>
+            <button className="tb-btn" onClick={exportCards}><CatIcon name="import" size={12} /> 导出</button>
+            <button className="tb-btn" onClick={() => setCardMode(false)}><CatIcon name="aichat" size={12} /> 返回对话</button>
           </div>
         </div>
         <div className="chat-cards-grid" style={{ flex: 1, overflow: 'auto', padding: 12 }}>
@@ -274,7 +278,7 @@ export default function AIChatView({ chapterContent, chapterTitle }) {
               <div className="cat-popup-title">关联书籍 · {archiveCat}</div>
               <button className="cat-opt" onClick={e => { e.stopPropagation(); finishArchive(null); }}>📌 不关联书籍</button>
               {books.map(b => (
-                <button key={b.id} className="cat-opt" onClick={e => { e.stopPropagation(); finishArchive(b.id); }}>📘 {b.title}</button>
+                <button key={b.id} className="cat-opt" onClick={e => { e.stopPropagation(); finishArchive(b.id); }}> {b.title}</button>
               ))}
               <button className="cat-opt" style={{color:'var(--text3)'}} onClick={e => { e.stopPropagation(); setArchiveStep('cat'); }}>← 返回选分类</button>
             </div>
@@ -362,24 +366,24 @@ export default function AIChatView({ chapterContent, chapterTitle }) {
       {/* 顶部工具栏 */}
       <div className="chat-toolbar">
         <div className="toolbar-left">
-          <span className="chat-toolbar-title">📖 {bookTitle || 'AI 写作伙伴'}</span>
+          <span className="chat-toolbar-title"><CatIcon name="books" size={16} /> {bookTitle || 'AI 写作伙伴'}</span>
           {bookContent && <span className="toolbar-wordcount">{bookContent.length} 字</span>}
         </div>
         <div className="toolbar-right">
           <button className="tool-btn" onClick={() => fileRef.current?.click()} disabled={uploading} title="上传书籍">
-            {uploading ? '⏳' : '📁'}
+            {uploading ? <CatIcon name="import" size={14} /> : <CatIcon name="folder" size={14} />}
           </button>
           {userCards.length > 0 && (
             <button className={`tool-btn ${cardMode ? 'active' : ''}`} onClick={() => setCardMode(true)} title="灵感卡片">
-              🔖 <span className="tool-badge">{userCards.length}</span>
+              <CatIcon name="cards" size={14} /> <span className="tool-badge">{userCards.length}</span>
             </button>
           )}
           {aiConversations.length > 0 && (
             <button className="tool-btn" onClick={() => setHistoryMode(true)} title="历史记录">
-              🕰️
+              <CatIcon name="history" size={14} />
             </button>
           )}
-          <button className="tool-btn primary" onClick={newConv}>✨ 新对话</button>
+          <button className="tool-btn primary" onClick={newConv}><CatIcon name="add" size={14} /> 新对话</button>
         </div>
         <input ref={fileRef} type="file" accept=".txt,.docx,.doc,.html" style={{ display: 'none' }} onChange={handleUploadBook} />
       </div>
@@ -399,37 +403,42 @@ export default function AIChatView({ chapterContent, chapterTitle }) {
 
       {/* 书籍信息 */}
       {bookContent && (
-        <div className="chat-book-bar">📖 {bookTitle || '已加载书籍'} ({bookContent.length}字)</div>
+        <div className="chat-book-bar"><CatIcon name="books" size={12} /> {bookTitle || '已加载书籍'} ({bookContent.length}字)</div>
       )}
 
       {/* 消息 */}
       <div className="chat-messages" ref={messagesRef}>
         {messages.length === 0 ? (
           <div className="chat-empty">
-            <span style={{ fontSize: 36 }}>💬</span>
+            <CatIcon name="aichat" size={36} />
             <p>AI 写作伙伴已就绪</p>
             <p className="chat-hint">上传一本书或点击下方按钮开始</p>
           </div>
         ) : (
           messages.map((m, i) => (
             <div key={i} className={`chat-message ${m.role === 'user' ? 'is-user' : 'is-ai'}`}>
-              <div className="chat-avatar">{m.role === 'user' ? '🙋' : '🤖'}</div>
+              <div className="chat-avatar">{m.role === 'user' ? <CatIcon name="brand" size={18} /> : <CatIcon name="aichat" size={18} />}</div>
               <div className="chat-bubble">{m.content}</div>
             </div>
           ))
         )}
-        {loading && <div className="chat-message is-ai"><div className="chat-avatar">🤖</div><div className="chat-bubble thinking">思考中...</div></div>}
+        {loading && <div className="chat-message is-ai"><div className="chat-avatar"><CatIcon name="aichat" size={18} /></div><div className="chat-bubble thinking">思考中...</div></div>}
       </div>
 
       {questions.length > 0 && (
-        <div className="chat-questions">{questions.map((q, i) => <button key={i} className="chat-q-btn" onClick={() => sendQuick(q)}>{q}</button>)}</div>
+        <div className="chat-questions chat-questions-tags">
+          {questions.map((q, i) => (
+            <button key={i} className="chat-q-tag" onClick={() => setInput(prev => (prev ? prev + '\n' : '') + q)}
+              title="点击复制到输入框">{(i+1)}</button>
+          ))}
+        </div>
       )}
       {messages.length === 0 && questions.length === 0 && (
-        <div className="chat-questions"><button className="chat-q-btn primary" onClick={generateQuestions} disabled={loading}>🤖 AI 生成思考问题</button></div>
+        <div className="chat-questions"><button className="chat-q-btn primary" onClick={generateQuestions} disabled={loading}><CatIcon name="aichat" size={14} /> AI 生成思考问题</button></div>
       )}
       <div className="chat-input-row">
-        <textarea className="chat-input" placeholder="输入你的想法..." value={input} onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} rows={8} />
+        <textarea className="chat-input" placeholder="输入你的想法... 回车换行，点➤发送" value={input} onChange={e => setInput(e.target.value)}
+          rows={8} />
         <button className="chat-send" onClick={sendMessage} disabled={!input.trim() || loading}>➤</button>
       </div>
     </div>

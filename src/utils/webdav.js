@@ -34,5 +34,21 @@ export async function cloudLoad() {
   }
 }
 
-export async function cloudListHistory() { return []; }
-export async function cloudLoadHistory() { return null; }
+export async function cloudListHistory() {
+  try {
+    const result = await apiPost('load', { action: 'list' });
+    return result.versions || [];
+  } catch (err) {
+    console.error('cloudListHistory FAIL:', err.message);
+    return [];
+  }
+}
+export async function cloudLoadHistory(key) {
+  try {
+    const result = await apiPost('load', { action: 'get', key });
+    return result.data || null;
+  } catch (err) {
+    console.error('cloudLoadHistory FAIL:', err.message);
+    return null;
+  }
+}

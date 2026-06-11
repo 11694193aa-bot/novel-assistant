@@ -65,7 +65,7 @@ export default function FloatingWindow({ x, y, bookId, chapterId, onClose }) {
       onMouseDown={handleMouseDown}
     >
       <div className="float-header" style={{ cursor: 'grab' }}>
-        <span>🐱 提示卡片</span>
+        <span> 提示卡片</span>
         <div className="float-header-actions">
           <input
             type="range"
@@ -82,14 +82,14 @@ export default function FloatingWindow({ x, y, bookId, chapterId, onClose }) {
       </div>
       <div className="float-body">
         <div className="float-info">
-          <strong>📖 章节:</strong> {chapter?.title || '未知'}
+          <strong>章节:</strong> {chapter?.title || '未知'}
         </div>
         <div className="float-actions">
           <button onClick={handleExtractToCard}>
-            🧠 提取到思维导图
+            提取到思维导图
           </button>
           <button onClick={handleExtractToInspiration}>
-            💡 提取到灵感卡片
+             提取到灵感卡片
           </button>
         </div>
         <div className="float-preview">

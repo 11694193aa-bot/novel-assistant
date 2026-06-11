@@ -4,7 +4,7 @@ import Icon from './Icon';
 
 const MODES = {
   quick: {
-    title: '⚡ 文字速记',
+    title: ' 文字速记',
     desc: '快速记录一闪而过的想法',
     category: '灵感火花',
     placeholder: '✧ 写下你此刻的想法吧 ( ﾟ 3ﾟ) ✧',

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import useStore from '../store';
 import { getWebDAVConfig, saveWebDAVConfig, testConnection } from '../utils/webdav';
 import { saveSplash } from '../utils/storage';
+import CatIcon from './CatIcon';
 
 const FONT_OPTIONS = [
   { key: 'font1', label: '微软雅黑', preview: '小说创作助手 — 现代清晰', desc: '现代无衬线，阅读最舒适' },
@@ -41,14 +42,14 @@ export default function SettingsPanel() {
   return (
     <div className="settings-panel">
       <div className="settings-header">
-        <h2>😻 设置</h2>
+        <h2>设置</h2>
         <p>自定义你的小说助手外观~</p>
       </div>
 
       <div className="settings-content">
         {/* 主题选择 */}
         <section className="setting-section">
-          <h3>🎨 美术主题</h3>
+          <h3><CatIcon name="palette" size={18} /> 美术主题</h3>
           <div className="theme-options">
             {[
               { key: 'warm', label: '暖茶', desc: '温暖大地色系', colors: ['#f7f3f0','#c47a5a','#4d3b30'] },
@@ -79,7 +80,7 @@ export default function SettingsPanel() {
 
         {/* 字体选择 */}
         <section className="setting-section">
-          <h3>🔤 字体选择</h3>
+          <h3><CatIcon name="font" size={18} /> 字体选择</h3>
           <div className="font-options">
             {FONT_OPTIONS.map(font => (
               <div
@@ -102,7 +103,7 @@ export default function SettingsPanel() {
 
         {/* 字号选择 */}
         <section className="setting-section">
-          <h3>📏 字号大小</h3>
+          <h3>字号大小</h3>
           <div className="size-options">
             {SIZE_PRESETS.map(size => (
               <button
@@ -131,7 +132,7 @@ export default function SettingsPanel() {
 
         {/* 字体颜色 */}
         <section className="setting-section">
-          <h3>🎨 字体颜色</h3>
+          <h3><CatIcon name="palette" size={18} /> 字体颜色</h3>
           <div className="color-options">
             {COLOR_PRESETS.map(color => (
               <button
@@ -147,7 +148,7 @@ export default function SettingsPanel() {
               onClick={() => setShowColorPicker(!showColorPicker)}
               title="自定义颜色"
             >
-              🎨
+              <CatIcon name="palette" size={16} />
             </button>
           </div>
           {showColorPicker && (
@@ -166,7 +167,7 @@ export default function SettingsPanel() {
             </div>
           )}
           <div className="color-preview" style={{ color: settings.fontColor, opacity: settings.fontOpacity || 1 }}>
-            🐱 喵~ 这是字体颜色预览
+            字体颜色预览
           </div>
           <div className="opacity-control" style={{ marginTop: 10 }}>
             <label style={{ fontSize: 11, color: 'var(--text3)' }}>透明度 {Math.round((settings.fontOpacity || 1) * 100)}%</label>
@@ -179,7 +180,7 @@ export default function SettingsPanel() {
 
         {/* 每日字数目标 */}
         <section className="setting-section">
-          <h3>🎯 每日字数目标</h3>
+          <h3><CatIcon name="target" size={18} /> 每日字数目标</h3>
           <div className="opacity-control">
             <input type="number" min="100" max="20000" step="100"
               value={settings.dailyGoal || 2000}
@@ -191,7 +192,7 @@ export default function SettingsPanel() {
 
         {/* 悬浮窗透明度 */}
         <section className="setting-section">
-          <h3>🪟 悬浮窗默认透明度</h3>
+          <h3> 悬浮窗默认透明度</h3>
           <div className="opacity-control">
             <input
               type="range"
@@ -210,11 +211,11 @@ export default function SettingsPanel() {
 
         {/* 存档设置 */}
         <section className="setting-section">
-          <h3>💾 存档设置</h3>
+          <h3>存档设置</h3>
           <div className="setting-info">
-            <p>📚 历史版本上限: 最近20次</p>
-            <p>💡 按 Ctrl+S 手动存档</p>
-            <p>☁️ 配置坚果云后自动云端同步</p>
+            <p>历史版本上限: 最近20次</p>
+            <p>按 Ctrl+S 手动存档</p>
+            <p>配置坚果云后自动云端同步</p>
           </div>
         </section>
 
@@ -229,7 +230,7 @@ export default function SettingsPanel() {
 
         {/* 开屏背景 */}
         <section className="setting-section">
-          <h3>🖼️ 开屏背景</h3>
+          <h3>开屏背景</h3>
           <p className="setting-info" style={{marginBottom:8}}>启动 App 时显示的背景图</p>
           {/* 实时预览窗口 */}
           {settings.splashImage && (
@@ -241,7 +242,7 @@ export default function SettingsPanel() {
               </span>
               <button onClick={() => setShowSplashPreview(true)}
                 style={{background:'rgba(0,0,0,.5)',color:'#fff',border:'none',borderRadius:8,padding:'2px 10px',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
-                👁️ 全屏预览
+                全屏预览
               </button>
             </div>
           )}
@@ -268,7 +269,7 @@ export default function SettingsPanel() {
               )}
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:6}}>
-              <label className="tb-btn" style={{cursor:'pointer'}}>📁 选择
+              <label className="tb-btn" style={{cursor:'pointer'}}><CatIcon name="folder" size={14} /> 选择
                 <input type="file" accept="image/*" style={{display:'none'}}
                   onChange={e => {
                     const f = e.target.files?.[0]; if (!f) return;
@@ -303,9 +304,9 @@ export default function SettingsPanel() {
               <select style={{padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',fontFamily:'inherit',fontSize:12}}
                 value={settings.splashFit || 'cover'}
                 onChange={async e => { updateSettings({ splashFit: e.target.value }); await useStore.getState().persist(); }}>
-                <option value="cover">🔲 裁剪填充</option>
-                <option value="contain">🖼️ 完整显示</option>
-                <option value="100% 100%">↔️ 拉伸铺满</option>
+                <option value="cover">裁剪填充</option>
+                <option value="contain">完整显示</option>
+                <option value="100% 100%">拉伸铺满</option>
               </select>
             </div>
           </div>
@@ -319,7 +320,7 @@ export default function SettingsPanel() {
           style={{position:'fixed',inset:0,zIndex:9999,background:`url(${settings.splashImage}) ${settings.splashPos||'center'}/${settings.splashFit||'cover'}`,backgroundRepeat:'no-repeat',
             display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',padding:40,cursor:'pointer'}}>
           <p style={{background:'rgba(0,0,0,.6)',color:'#fff',padding:'8px 20px',borderRadius:20,fontSize:14,fontWeight:600,fontFamily:'inherit'}}>
-            👆 点击任意位置关闭预览
+            点击任意位置关闭预览
           </p>
         </div>
       )}
@@ -360,7 +361,7 @@ function CloudSyncSection() {
 
   return (
     <section className="setting-section">
-      <h3>☁️ 坚果云同步</h3>
+      <h3>坚果云同步</h3>
       <p style={{fontSize:12,color:'var(--text3)',marginBottom:10}}>
         配置后数据自动云同步 · 手机电脑实时互通 · 密码请用坚果云「应用密码」
       </p>
@@ -376,19 +377,19 @@ function CloudSyncSection() {
           placeholder="坚果云「应用密码」（非登录密码）" />
         <div className="webdav-actions">
           <button onClick={handleTest} disabled={testing || !url || !username || !password}>
-            {testing ? '测试中...' : '🔍 测试连接'}
+            {testing ? '测试中...' : '测试连接'}
           </button>
           <button onClick={handleSave} disabled={!url || !username || !password}>
-            💾 保存配置
+            保存配置
           </button>
           {status === 'connected' && (
             <button onClick={handleDisconnect} className="webdav-disconnect">断开</button>
           )}
         </div>
         <div className="webdav-status">
-          {status === 'testing' && <span>⏳ 正在测试连接...</span>}
-          {status === 'connected' && <span style={{color:'#4caf7c'}}>✅ 已连接 · 数据自动云同步</span>}
-          {status === 'error' && <span style={{color:'#e74c3c'}}>❌ 连接失败 · 请检查地址/账号/密码</span>}
+          {status === 'testing' && <span>正在测试连接...</span>}
+          {status === 'connected' && <span style={{color:'#4caf7c'}}>已连接 · 数据自动云同步</span>}
+          {status === 'error' && <span style={{color:'#e74c3c'}}>连接失败 · 请检查地址/账号/密码</span>}
         </div>
       </div>
     </section>
@@ -432,7 +433,7 @@ function ExportBookSection() {
         const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>${filename}</title>
 <style>body{font-family:"Microsoft YaHei",sans-serif;max-width:800px;margin:40px auto;padding:20px;line-height:2}
 h1{color:#c47a5a} h2{color:#7a685b;margin-top:28px} p{text-indent:2em}</style></head><body>
-<h1>📚 全书导出</h1><p>${now}</p>
+<h1>全书导出</h1><p>${now}</p>
 ${books.map(b => `<h2>《${b.title}》</h2>${(b.chapters||[]).sort((a,b)=>a.order-b.order).map(c => `<h3>${c.title}</h3>${(c.content||'').split('\\n').filter(l=>l.trim()).map(l=>`<p>${l}</p>`).join('')}`).join('')}`).join('<hr>')}
 </body></html>`;
         const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
@@ -452,16 +453,16 @@ ${books.map(b => `<h2>《${b.title}》</h2>${(b.chapters||[]).sort((a,b)=>a.orde
 
   return (
     <section className="setting-section">
-      <h3>📖 导出全书</h3>
+      <h3>导出全书</h3>
       <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
         将所有书籍所有章节合并导出为一个文件
       </p>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button className="btn-export-book" onClick={() => handleExport('txt')} disabled={busy}>
-          📄 导出 TXT
+          导出 TXT
         </button>
         <button className="btn-export-book" onClick={() => handleExport('html')} disabled={busy}>
-          🌐 导出 HTML
+          导出 HTML
         </button>
       </div>
       {msg && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: msg.startsWith('✅') ? '#3b6d50' : '#d44' }}>{msg}</div>}
@@ -515,16 +516,16 @@ function ManualSyncSection() {
 
   return (
     <section className="setting-section">
-      <h3>☁️ 手动云端同步</h3>
+      <h3>手动云端同步</h3>
       <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
         上传：电脑数据 → 云端<br/>下载：云端 → 覆盖本机（手机/电脑切换时使用）
       </p>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button className="tb-btn" onClick={handleUpload} disabled={syncing} style={{ fontWeight: 700 }}>
-          📤 上传到云端
+          上传到云端
         </button>
         <button className="tb-btn" onClick={handleDownload} disabled={syncing} style={{ fontWeight: 700 }}>
-          📥 从云端下载
+          从云端下载
         </button>
       </div>
       {msg && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: msg.startsWith('✅') ? '#3b6d50' : '#d44' }}>{msg}</div>}
@@ -595,7 +596,7 @@ function BackupRestoreSection() {
         const cardCount = backup.inspirationCards?.length || 0;
         const convCount = backup.aiConversations?.length || 0;
         const ok = window.confirm(
-          `即将恢复备份数据：\n\n📚 ${bookCount} 本书\n💡 ${cardCount} 张灵感卡片\n🤖 ${convCount} 条 AI 对话\n\n⚠️ 当前数据将被覆盖，确定继续？`
+          `即将恢复备份数据：\n\n${bookCount} 本书\n ${cardCount} 张灵感卡片\n🤖 ${convCount} 条 AI 对话\n\n⚠️ 当前数据将被覆盖，确定继续？`
         );
         if (!ok) { setBusy(false); return; }
 
@@ -616,7 +617,7 @@ function BackupRestoreSection() {
         });
         // 写入 IndexedDB
         await useStore.getState().persist();
-        showMsg('ok', `✅ 恢复成功！请刷新页面查看。\n📚 ${bookCount} 书 · 💡 ${cardCount} 灵感 · 🤖 ${convCount} 对话`);
+        showMsg('ok', `✅ 恢复成功！请刷新页面查看。\n${bookCount} 书 ·  ${cardCount} 灵感 · 🤖 ${convCount} 对话`);
         // 3 秒后自动刷新
         setTimeout(() => { window.location.reload(); }, 2500);
       } catch (e) {
@@ -632,7 +633,7 @@ function BackupRestoreSection() {
 
   return (
     <section className="setting-section">
-      <h3>📦 全量备份 & 恢复</h3>
+      <h3>全量备份 & 恢复</h3>
       <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
         一键导出全部数据为 JSON 文件 · 清缓存前先备份 · 换设备时用文件恢复
       </p>
@@ -643,10 +644,10 @@ function BackupRestoreSection() {
           disabled={busy}
           style={{ fontWeight: 700 }}
         >
-          {busy ? '⏳' : '📤'} 导出备份
+          导出备份
         </button>
         <label className="tb-btn" style={{ cursor: 'pointer', fontWeight: 700 }}>
-          📥 导入恢复
+          导入恢复
           <input type="file" accept=".json" style={{ display: 'none' }}
             onChange={handleImport} disabled={busy} />
         </label>

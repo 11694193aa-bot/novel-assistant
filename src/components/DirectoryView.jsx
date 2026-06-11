@@ -38,7 +38,6 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
   };
 
   const handleAddChapter = (targetBookId, parentId = null) => {
-    // 直接创建，自动命名为"第N章"
     const ch = addChapter(targetBookId, '', parentId);
     setExpandedBooks(prev => ({ ...prev, [targetBookId]: true }));
     if (parentId) {
@@ -101,7 +100,6 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
               <span className="dir-expand-icon" onClick={(e) => { e.stopPropagation(); toggleChapter(ch.id); }}>
                 {hasKids ? (isExpanded ? '▼' : '▶') : '　'}
               </span>
-              <span className="dir-icon">{depth === 0 ? '📖' : '📄'}</span>
               {editingChapterId === ch.id ? (
                 <input className="dir-inline-edit" defaultValue={ch.title}
                   onBlur={(e) => { renameChapter(selectedBookId, ch.id, e.target.value || ch.title); setEditingChapterId(null); }}
@@ -129,7 +127,7 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
     <div className="directory-view">
       <div className={`dir-sidebar ${collapsed ? 'collapsed' : ''}`}>
         <div className="sidebar-header">
-          <span style={{fontSize:14}}>📚</span>
+          <span style={{fontSize:14}}></span>
           <span>书籍</span>
           <div className="sidebar-header-actions">
             <button className="btn-icon" onClick={handleAddBook} title="新建书籍">+</button>
@@ -182,7 +180,7 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
                     <BookCoverImg bookId={b.id} cover={b.cover} size={26} />
                   </span>
                   {b.title}
-                  <button className="dir-btn" style={{marginLeft:4}} onClick={e => { e.stopPropagation(); setEditingBookId(b.id); }} title="改名">✏️</button>
+                  <button className="dir-btn" style={{marginLeft:4}} onClick={e => { e.stopPropagation(); setEditingBookId(b.id); }} title="改名"></button>
                   <input id={`cover-input-${b.id}`} type="file" accept="image/*" style={{display:'none'}}
                     onChange={e => {
                       const file = e.target.files[0];
@@ -194,32 +192,32 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
                 </span>
               )}
               <span className="dir-book-count">{(b.chapters || []).length}</span>
+              {b === book && expandedBooks[b.id] && (
+                <div className="dir-book-inline-actions">
+                  <button className="dir-btn dir-btn-add" title="新章节" onClick={(e) => { e.stopPropagation(); handleAddChapter(b.id); }}>+</button>
+                  {chapters.length > 0 && (
+                    <button className="dir-btn" title={selectedChapters.size === chapters.length ? '取消全选' : '全选章节'}
+                      onClick={(e) => { e.stopPropagation();
+                        if (selectedChapters.size === chapters.length) setSelectedChapters(new Set());
+                        else setSelectedChapters(new Set(chapters.map(c => c.id)));
+                      }}>{selectedChapters.size === chapters.length ? '☑' : '☐'}</button>
+                  )}
+                  {selectedChapters.size > 0 && (
+                    <button className="dir-btn dir-btn-del" title={`删除选中(${selectedChapters.size})`}
+                      onClick={(e) => { e.stopPropagation();
+                        if (confirm(`删除 ${selectedChapters.size} 个章节？`)) {
+                          selectedChapters.forEach(id => deleteChapter(b.id, id));
+                          setSelectedChapters(new Set());
+                        }
+                      }}>🗑{selectedChapters.size}</button>
+                  )}
+                </div>
+              )}
               <button className="dir-btn dir-btn-del" title="删除" onClick={(e) => { e.stopPropagation(); if (confirm(`删除"${b.title}"？`)) { deleteBook(b.id); if (selectedBookId === b.id) { onSelectBook(null); onSelectChapter(null); }}}}>×</button>
             </div>
 
             {expandedBooks[b.id] && (
               <div className="dir-book-chapters">
-                {b === book && (
-                  <div className="dir-chapter-toolbar">
-                    <button className="btn-add-chapter-sm" onClick={() => handleAddChapter(b.id)}>+ 新章节</button>
-                    {chapters.length > 0 && (
-                      <>
-                        <button className="btn-add-chapter-sm" style={{marginLeft:4}} onClick={() => {
-                          if (selectedChapters.size === chapters.length) setSelectedChapters(new Set());
-                          else setSelectedChapters(new Set(chapters.map(c => c.id)));
-                        }}>{selectedChapters.size === chapters.length ? '取消全选' : '全选章节'}</button>
-                        {selectedChapters.size > 0 && (
-                          <button className="btn-add-chapter-sm" style={{marginLeft:4,color:'#d44'}} onClick={() => {
-                            if (confirm(`删除 ${selectedChapters.size} 个章节？`)) {
-                              selectedChapters.forEach(id => deleteChapter(b.id, id));
-                              setSelectedChapters(new Set());
-                            }
-                          }}>删除选中({selectedChapters.size})</button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
                 {b === book && renderChapterTree()}
                 {b !== book && <div className="dir-chapter-placeholder" onClick={() => onSelectBook(b.id)}>点击展开查看章节</div>}
               </div>
@@ -238,7 +236,7 @@ export default function DirectoryView({ selectedBookId, selectedChapterId, onSel
           <ChapterEditor bookId={selectedBookId} chapter={chapter} books={books} onCalendarClick={onCalendarClick} />
         ) : (
           <div className="empty-view">
-            <span style={{fontSize:40}}>📚</span>
+            <span style={{fontSize:40}}></span>
             <p>( ﾟ 3ﾟ) 选择或创建一个章节开始写作吧~</p>
             <p className="hint">✧ 点击左侧 ▶ 展开书籍目录 ✧</p>
           </div>

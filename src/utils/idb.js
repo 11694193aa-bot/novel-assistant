@@ -2,7 +2,10 @@
 const DB_NAME = 'novel_app_db';
 const DB_VERSION = 2;
 
+let _dbCache = null;
+
 function openDB() {
+  if (_dbCache) return Promise.resolve(_dbCache);
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
@@ -11,7 +14,12 @@ function openDB() {
         db.createObjectStore('store');
       }
     };
-    req.onsuccess = (e) => resolve(e.target.result);
+    req.onsuccess = (e) => {
+      _dbCache = e.target.result;
+      _dbCache.onclose = () => { _dbCache = null; };
+      _dbCache.onversionchange = () => { _dbCache.close(); _dbCache = null; };
+      resolve(_dbCache);
+    };
     req.onerror = (e) => reject(e.target.error);
   });
 }

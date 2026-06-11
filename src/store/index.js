@@ -29,12 +29,13 @@ const useStore = create((set, get) => ({
   // ============ 数据 ============
   books: [],
   inspirationCards: [],
-  aiConversations: [],    // AI对话记录 [{ id, title, bookContent, bookTitle, messages, createdAt }]
+  aiConversations: [],
   settings: { ...defaultSettings },
   dailyCounts: {},
-  trash: [],          // 回收站 [{ id, type, item, bookId, deletedAt }]
+  trash: [],
   dirty: false,
   initialized: false,
+  toast: null,          // { text: string, ts: number }  — 全局提示弹窗
 
   // ============ 初始化 ============
   init: async () => {
@@ -57,19 +58,21 @@ const useStore = create((set, get) => ({
   },
 
   // ============ 持久化 ============
-  persist: async () => {
+  persist: async (silent = false) => {
+    if (!silent) set({ toast: { text: '正在保存，请勿退出...', ts: Date.now() } });
     const { books, inspirationCards, aiConversations, settings, dailyCounts, trash } = get();
     const { splashImage, ...settingsWithoutSplash } = settings;
     const data = { books, inspirationCards, aiConversations, settings: settingsWithoutSplash, dailyCounts, trash };
-    // IndexedDB 存储主数据（无容量限制）
     await saveData(SAVE_KEY, data);
-    // 开屏图单独存 localStorage（已压缩）
     if (splashImage) saveSplash(splashImage); else { try { localStorage.removeItem('novel_splash'); } catch (_) {} }
     await saveHistory(SAVE_KEY, data, Date.now());
     set({ dirty: false });
+    if (!silent) set({ toast: { text: '已同步到云端', ts: Date.now() } });
   },
 
   markDirty: () => set({ dirty: true }),
+  showToast: (text) => set({ toast: { text, ts: Date.now() } }),
+  clearToast: () => set({ toast: null }),
 
   // ============ 每日字数追踪 ============
   addDailyCount: (delta) => {
@@ -354,14 +357,14 @@ const useStore = create((set, get) => ({
     set(s => {
       const book = s.books.find(b => b.id === bookId);
       if (!book) return s;
-      const cards = JSON.parse(JSON.stringify(book.mindMapCards || []));
+      const cards = structuredClone(book.mindMapCards || []);
 
       // 递归查找并移除卡片（深拷贝保留children）
       let movedCard = null;
       const removeFrom = (list) => {
         const result = [];
         for (const c of list) {
-          if (c.id === cardId) { movedCard = JSON.parse(JSON.stringify(c)); continue; }
+          if (c.id === cardId) { movedCard = structuredClone(c); continue; }
           result.push({ ...c, children: removeFrom(c.children || []) });
         }
         return result;
@@ -389,6 +392,41 @@ const useStore = create((set, get) => ({
         return { books: s.books.map(b => b.id === bookId ? { ...b, mindMapCards: result } : b), dirty: true };
       }
 
+      return { books: s.books.map(b => b.id === bookId ? { ...b, mindMapCards: cleaned } : b), dirty: true };
+    });
+  },
+
+  // 同级排序：cardId 插入到 targetId 之前(before=true)或之后
+  reorderMindMapCard: (bookId, cardId, targetId, before = true) => {
+    set(s => {
+      const book = s.books.find(b => b.id === bookId);
+      if (!book || cardId === targetId) return s;
+      const cards = structuredClone(book.mindMapCards || []);
+      let movedCard = null;
+      const removeFrom = (list) => {
+        const result = [];
+        for (const c of list) {
+          if (c.id === cardId) { movedCard = structuredClone(c); continue; }
+          result.push({ ...c, children: removeFrom(c.children || []) });
+        }
+        return result;
+      };
+      const cleaned = removeFrom(cards);
+      if (!movedCard) return s;
+      let inserted = false;
+      const insertAt = (list, parentId) => {
+        for (let i = 0; i < list.length; i++) {
+          if (list[i].id === targetId) {
+            movedCard.parentId = parentId || null;
+            list.splice(before ? i : i + 1, 0, movedCard);
+            inserted = true; return true;
+          }
+          if (insertAt(list[i].children || [], list[i].id)) return true;
+        }
+        return false;
+      };
+      insertAt(cleaned, null);
+      if (!inserted) cleaned.push(movedCard);
       return { books: s.books.map(b => b.id === bookId ? { ...b, mindMapCards: cleaned } : b), dirty: true };
     });
   },

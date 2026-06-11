@@ -1,29 +1,65 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
 import useStore from '../store';
 import Icon, { getBookCat, BookCoverImg } from './Icon';
-import GachaMachine from './GachaMachine';
-import QuickNotes from './QuickNotes';
-import CalendarView from './CalendarView';
-import TrashView from './TrashView';
+import CatIcon, { CatIconButton } from './CatIcon';
+
+const GachaMachine = lazy(() => import('./GachaMachine'));
+const QuickNotes = lazy(() => import('./QuickNotes'));
+const CalendarView = lazy(() => import('./CalendarView'));
+const TrashView = lazy(() => import('./TrashView'));
 
 const INDENT = '　　';
 
-// 底部栏标签
 const bottomTabs = [
-  { key: 'books', emoji: '📚', label: '书架' },
-  { key: 'mindmap', emoji: '🧠', label: '导图' },
-  { key: 'inspiration', emoji: '💡', label: '灵感' },
-  { key: 'aichat', emoji: '🤖', label: 'AI' },
-  { key: 'fun', emoji: '🎰', label: '乐趣' },
-  { key: 'settings', emoji: '⚙️', label: '设置' },
+  { key: 'books', icon: 'books', label: '书架' },
+  { key: 'mindmap', icon: 'mindmap', label: '导图' },
+  { key: 'inspiration', icon: 'inspiration', label: '灵感' },
+  { key: 'aichat', icon: 'aichat', label: 'AI' },
+  { key: 'fun', icon: 'fun', label: '乐趣' },
+  { key: 'settings', icon: 'settings', label: '设置' },
 ];
+
+const funMenuItems = [
+  { icon: 'quicknote', label: '速记阁', key: 'quicknote' },
+  { icon: 'filmnote', label: '拉片室', key: 'filmnote' },
+  { icon: 'gacha', label: '扭蛋屋', key: 'gacha' },
+  { icon: 'calendar', label: '日历记', key: 'calendar' },
+  { icon: 'trash', label: '清理站', key: 'trash' },
+];
+
+function FunMenu({ onClose, onAction }) {
+  return (
+    <div className="ms-fun-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="ms-fun-sheet">
+        <div className="ms-fun-handle" />
+        <div className="ms-fun-header">
+          <CatIcon name="paw" size={18} />
+          <h3 className="ms-fun-title">乐趣栏</h3>
+          <button className="ms-fun-close-btn" onClick={onClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <div className="ms-fun-grid">
+          {funMenuItems.map((item) => (
+            <button key={item.key} className="ms-fun-card" onClick={() => onAction(item.key)}>
+              <span className="ms-fun-card-icon"><CatIcon name={item.icon} size={28} /></span>
+              <span className="ms-fun-card-label">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function MobileStack({
   onTabChange, onGachaClick, onQuickNote, onFilmNote,
   onCalendarClick, onTrashClick, activeMainTab,
 }) {
   const { books, addBook, deleteBook, renameBook, addChapter, updateChapterContent,
-    addDailyCount, dailyCounts, addInspirationCard, setBookCover, deleteChapter, reorderChapters } = useStore();
+    addDailyCount, dailyCounts, addInspirationCard, setBookCover, deleteChapter, reorderChapters, persist, dirty } = useStore();
   const [editingBookId, setEditingBookId] = useState(null);
   const [bookBatchMode, setBookBatchMode] = useState(false);
   const [selectedBooks, setSelectedBooks] = useState(new Set());
@@ -64,6 +100,15 @@ export default function MobileStack({
   const book = books.find(b => b.id === selectedBookId);
   const chapters = book?.chapters || [];
   const chapter = chapters.find(c => c.id === selectedChapterId);
+
+  // 离开编辑器时自动保存
+  const prevPageRef = useRef(page);
+  useEffect(() => {
+    if (prevPageRef.current === 'editor' && page !== 'editor' && dirty) {
+      persist();
+    }
+    prevPageRef.current = page;
+  }, [page]);
 
   // 导航方法
   const pushPage = useCallback((newPage) => {
@@ -169,7 +214,6 @@ export default function MobileStack({
     setFindResults([]); setCurrentFindIdx(-1);
   };
 
-  // 底部栏点击
   const handleBottomTab = (tabKey) => {
     if (tabKey === 'fun') {
       setShowFunMenu(true);
@@ -177,19 +221,18 @@ export default function MobileStack({
       setPage('books'); setPageHistory([]);
       setSelectedChapterId(null);
     } else {
-      // 切换到其他主标签
       onTabChange(tabKey);
     }
   };
 
-  // 乐趣菜单项
-  const funMenuItems = [
-    { icon: '⚡', label: '文字速记', action: () => { setShowFunMenu(false); setQuickNoteOpen(true); } },
-    { icon: '🎬', label: '拉片速记', action: () => { setShowFunMenu(false); setFilmNoteOpen(true); } },
-    { icon: '🎰', label: '扭蛋机', action: () => { setShowFunMenu(false); setGachaOpen(true); } },
-    { icon: '📅', label: '字数日历', action: () => { setShowFunMenu(false); setCalendarOpen(true); } },
-    { icon: '🗑️', label: '回收站', action: () => { setShowFunMenu(false); setTrashOpen(true); } },
-  ];
+  const handleFunAction = useCallback((key) => {
+    setShowFunMenu(false);
+    if (key === 'quicknote') setQuickNoteOpen(true);
+    else if (key === 'filmnote') setFilmNoteOpen(true);
+    else if (key === 'gacha') setGachaOpen(true);
+    else if (key === 'calendar') setCalendarOpen(true);
+    else if (key === 'trash') setTrashOpen(true);
+  }, []);
 
   // 按 parentId 排序章节树
   const topChapters = chapters.filter(c => !c.parentId).sort((a, b) => a.order - b.order);
@@ -217,7 +260,6 @@ export default function MobileStack({
         >
           {batchMode && <input type="checkbox" checked={selectedIds.has(ch.id)} readOnly
             style={{width:18,height:18,accentColor:'var(--pink)',flexShrink:0}} />}
-          <span className="ms-chapter-icon">{depth === 0 ? '📖' : '📄'}</span>
           <span className="ms-chapter-title">{ch.title}</span>
           <span className="ms-chapter-count">{(ch.content || '').replace(/\s/g, '').length}字</span>
           {!batchMode && (
@@ -288,7 +330,7 @@ export default function MobileStack({
         return (
           <div className="ms-page" key="books">
             <div className="ms-header">
-              <h1 className="ms-header-title">📚 我的书架</h1>
+              <h1 className="ms-header-title"><CatIcon name="books" size={20} /> 我的书架</h1>
               <button className="ms-header-btn" onClick={() => { setBookBatchMode(!bookBatchMode); setSelectedBooks(new Set()); }}
                 style={{background:bookBatchMode?'var(--pink)':'var(--pink3)',color:bookBatchMode?'#fff':'var(--text)',fontWeight:800,fontSize:bookBatchMode?16:20}}>
                 {bookBatchMode ? '✕' : '☰'}
@@ -327,7 +369,16 @@ export default function MobileStack({
                 </div>
               ) : (
                 books.map(b => (
-                  <div key={b.id} className="ms-book-card" onClick={() => { if (bookBatchMode) { setSelectedBooks(prev => { const next = new Set(prev); if (next.has(b.id)) next.delete(b.id); else next.add(b.id); return next; }); } else handleSelectBook(b.id); }}>
+                  <div key={b.id} className="ms-book-card"
+                    onClick={() => { if (bookBatchMode) { setSelectedBooks(prev => { const next = new Set(prev); if (next.has(b.id)) next.delete(b.id); else next.add(b.id); return next; }); } else if (!editingBookId) handleSelectBook(b.id); }}
+                    onContextMenu={(e) => { e.preventDefault(); setEditingBookId(b.id); }}
+                    onTouchStart={(e) => {
+                      const timer = setTimeout(() => { setEditingBookId(b.id); }, 600);
+                      e.currentTarget._longPress = timer;
+                    }}
+                    onTouchEnd={(e) => { clearTimeout(e.currentTarget._longPress); }}
+                    onTouchMove={(e) => { clearTimeout(e.currentTarget._longPress); }}
+                  >
                     {bookBatchMode && (
                       <input type="checkbox" className="card-check" checked={selectedBooks.has(b.id)} readOnly style={{flexShrink:0,width:20,height:20,accentColor:'var(--pink)'}} />
                     )}
@@ -351,7 +402,6 @@ export default function MobileStack({
                       ) : (
                         <div className="ms-book-title">
                           {b.title}
-                          <button className="dir-btn" style={{marginLeft:6,fontSize:11}} onClick={e => { e.stopPropagation(); setEditingBookId(b.id); }} title="改名">✏️</button>
                         </div>
                       )}
                       <div className="ms-book-meta">{(b.chapters || []).length} 章 · 创建于 {new Date(b.createdAt).toLocaleDateString('zh-CN')}</div>
@@ -470,32 +520,13 @@ export default function MobileStack({
             <div className="ms-editor-footer">
               <span className="ms-word-count">本章 {wordCount} 字</span>
               <span className="ms-word-count ms-today-count">今日 {todayCount} 字</span>
-              <button className="ms-fab-btn" onClick={() => setFocusMode(!focusMode)} style={{fontSize:14}}>🧘</button>
+              <button className="ms-fab-btn" onClick={() => setFocusMode(!focusMode)}><CatIcon name="focus" size={18} /></button>
               <button className="ms-fab-btn" onClick={() => setShowFunMenu(true)}>⋯</button>
             </div>
           </div>
         );
     }
   };
-
-  // ======== 乐趣菜单弹窗 ========
-  const FunMenu = () => (
-    <div className="ms-fun-overlay" onClick={e => { if (e.target === e.currentTarget) setShowFunMenu(false); }}>
-      <div className="ms-fun-sheet">
-        <div className="ms-fun-handle" />
-        <h3 className="ms-fun-title">🎪 乐趣栏</h3>
-        <div className="ms-fun-items">
-          {funMenuItems.map((item, i) => (
-            <button key={i} className="ms-fun-item" onClick={item.action}>
-              <span className="ms-fun-icon">{item.icon}</span>
-              <span className="ms-fun-label">{item.label}</span>
-            </button>
-          ))}
-        </div>
-        <button className="ms-fun-close" onClick={() => setShowFunMenu(false)}>取消</button>
-      </div>
-    </div>
-  );
 
   return (
     <div className="mobile-stack" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
@@ -513,7 +544,7 @@ export default function MobileStack({
               className={`ms-bottom-tab ${(tab.key === 'books' && (page === 'books' || page === 'chapters')) || activeMainTab === tab.key ? 'active' : ''}`}
               onClick={() => handleBottomTab(tab.key)}
             >
-              <span style={{fontSize: tab.key === 'fun' ? 22 : 20}}>{tab.emoji}</span>
+              <CatIconButton name={tab.icon} size={22} isActive={(tab.key === 'books' && (page === 'books' || page === 'chapters')) || activeMainTab === tab.key} />
               <span className="ms-bottom-label">{tab.label}</span>
             </button>
           ))}
@@ -521,19 +552,21 @@ export default function MobileStack({
       )}
 
       {/* 各种弹窗 */}
-      {showFunMenu && <FunMenu />}
-      {gachaOpen && <GachaMachine books={books} onClose={() => setGachaOpen(false)} />}
-      {quickNoteOpen && <QuickNotes mode="quick" books={books} onClose={() => setQuickNoteOpen(false)} />}
-      {filmNoteOpen && <QuickNotes mode="film" books={books} onClose={() => setFilmNoteOpen(false)} />}
-      {calendarOpen && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setCalendarOpen(false)}>
-          <div className="cal-modal">
-            <button className="modal-close" onClick={() => setCalendarOpen(false)}>✕</button>
-            <CalendarView />
+      {showFunMenu && <FunMenu onClose={() => setShowFunMenu(false)} onAction={handleFunAction} />}
+      <Suspense fallback={null}>
+        {gachaOpen && <GachaMachine books={books} onClose={() => setGachaOpen(false)} />}
+        {quickNoteOpen && <QuickNotes mode="quick" books={books} onClose={() => setQuickNoteOpen(false)} />}
+        {filmNoteOpen && <QuickNotes mode="film" books={books} onClose={() => setFilmNoteOpen(false)} />}
+        {calendarOpen && (
+          <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setCalendarOpen(false)}>
+            <div className="cal-modal">
+              <button className="modal-close" onClick={() => setCalendarOpen(false)}>✕</button>
+              <CalendarView />
+            </div>
           </div>
-        </div>
-      )}
-      {trashOpen && <TrashView onClose={() => setTrashOpen(false)} />}
+        )}
+        {trashOpen && <TrashView onClose={() => setTrashOpen(false)} />}
+      </Suspense>
     </div>
   );
 }
