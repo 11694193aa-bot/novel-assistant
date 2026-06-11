@@ -102,7 +102,9 @@
       "Bash(git stash *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://4983234d.novel-assistant-drf.pages.dev/\")",
       "Bash(curl -s \"http://localhost:5199/\")",
-      "Bash(npx puppeteer *)"
+      "Bash(npx puppeteer *)",
+      "Bash(node test-drag.mjs)",
+      "Bash(node test-drag.cjs)"
     ],
     "additionalDirectories": [
       "C:\\Users\\11694\\AppData\\Local\\Temp",

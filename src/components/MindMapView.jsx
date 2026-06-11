@@ -195,13 +195,11 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     const onStart = (e) => {
       if (e.touches.length > 1) return;
       const t = e.touches[0];
-      // ⋯ 菜单按钮交给 React 处理，不启动拖拽
       if (e.target.closest('.tree-menu-handle')) return;
       const node = e.target.closest('.tree-node');
       if (!node) return;
       const cardId = node.dataset.cardId;
       if (!cardId) return;
-      // 从 book 数据中找到卡片对象
       const findCard = (list, id) => { for (const c of list) { if (c.id === id) return c; const r = findCard(c.children || [], id); if (r) return r; } return null; };
       const card = findCard(bookRef.current?.mindMapCards || [], cardId);
       if (!card) return;
@@ -241,7 +239,6 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     const onEnd = (e) => {
       clearTimeout(tdTimer.current); tdTimer.current = null;
       if (!tdRef.current.active) return;
-      // touchend 坐标不可靠？用 touchmove 最后保存的坐标兜底
       const t = e.changedTouches[0];
       const cx = t.clientX || tdRef.current.lx;
       const cy = t.clientY || tdRef.current.ly;
