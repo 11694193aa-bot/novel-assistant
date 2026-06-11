@@ -649,13 +649,13 @@ body {
 }
 .tree-collapse-btn:hover { background:var(--pink); color:#fff; }
 
-/* ── 树节点菜单手柄 ── */
+/* ── 树节点菜单手柄：浮在卡片上方，水平对齐正文第一个字 ── */
 .tree-menu-handle {
-  position:absolute; right:4px; top:2px;
-  color:var(--text3); font-size:14px; cursor:pointer; padding:2px 5px;
-  border-radius:6px; z-index:6; opacity:0; transition:.12s;
+  position:absolute; top:-16px; left:20px;
+  color:var(--text3); font-size:13px; cursor:pointer; padding:1px 4px;
+  border-radius:3px; opacity:0; transition:.12s;
   font-weight:700; letter-spacing:-1px; font-family:inherit;
-  line-height:1;
+  line-height:1; z-index:7;
 }
 .tree-node:hover .tree-menu-handle { opacity:.6; }
 .tree-menu-handle:hover { opacity:1 !important; background:var(--hover); }
@@ -930,8 +930,8 @@ ul.tree { padding-left:0; }
   .tree-node { max-width:85vw; padding:10px 14px; font-size:12px; border-radius:10px; min-width:200px; }
   .tree-text-node { max-width:82vw; }
   .tree-edit-content { min-width:200px; }
-  .tree-node-add { width:28px; height:28px; right:-14px; font-size:17px; line-height:28px; opacity:1; }
-  .tree-menu-handle { opacity:.5; font-size:13px; padding:4px 6px; }
+  .tree-node-add { width:22px; height:22px; right:-11px; font-size:14px; line-height:22px; opacity:1; }
+  .tree-menu-handle { opacity:.5; font-size:12px; padding:1px 3px; top:-14px; left:14px; }
   .tree-collapse-btn { width:22px; height:22px; font-size:9px; left:-14px; }
   .tree-zoom-controls { bottom:12px; padding:5px 10px; gap:4px; }
   .tree-zoom-btn { width:28px; height:28px; font-size:16px; }
