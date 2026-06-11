@@ -218,13 +218,13 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
         tdRef.current.active = true;
         setTreeDragId(cardId);
         if (navigator.vibrate) navigator.vibrate(15);
-      }, 500);
+      }, 400);
     };
     const onMove = (e) => {
       if (!tdRef.current.active) {
         if (tdTimer.current) {
           const t = e.touches[0];
-          if (Math.abs(t.clientX - tdRef.current.sx) > 10 || Math.abs(t.clientY - tdRef.current.sy) > 10) {
+          if (Math.abs(t.clientX - tdRef.current.sx) > 15 || Math.abs(t.clientY - tdRef.current.sy) > 15) {
             clearTimeout(tdTimer.current); tdTimer.current = null;
           }
         }
