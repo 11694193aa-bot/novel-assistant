@@ -33,7 +33,7 @@ export default function AIChatView({ chapterContent, chapterTitle }) {
   // 归档防重入锁（手机端 touch 事件链会导致 onClick 触发多次）
   const archiving = useRef(false);
 
-  useEffect(() => { if (!settings.apiKey) setShowKeyInput(true); }, []);
+  useEffect(() => { if (!sessionStorage.getItem('ai_api_key')) setShowKeyInput(true); }, []);
 
   // 初始化：从灵感卡片库还原已归档的 _cid 集合
   useEffect(() => {
@@ -68,8 +68,13 @@ export default function AIChatView({ chapterContent, chapterTitle }) {
   const callAI = async (msgs, content) => {
     setLoading(true);
     try {
+      const localKey = sessionStorage.getItem('ai_api_key') || '';
       const res = await fetch('/api/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localKey}`,
+        },
         body: JSON.stringify({ messages: msgs, chapterContent: content }),
       });
       const data = await res.json();
@@ -80,16 +85,9 @@ export default function AIChatView({ chapterContent, chapterTitle }) {
 
   const saveApiKey = async () => {
     if (!apiKey.trim()) return;
-    try {
-      const res = await fetch('/api/sync/save-key', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'api_key', value: apiKey.trim() }),
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || '保存失败');
-      updateSettings({ apiKey: '••••' + apiKey.slice(-4) });
-      await persist(); setShowKeyInput(false);
-    } catch (e) { alert('保存失败: ' + e.message); }
+    // 只在 sessionStorage 临时保存，不持久化到 store/云端
+    sessionStorage.setItem('ai_api_key', apiKey.trim());
+    setShowKeyInput(false);
   };
 
   const saveCurrentConv = useCallback(() => {

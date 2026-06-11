@@ -25,36 +25,38 @@ export default function ChapterEditor({ bookId, chapter, books, onCalendarClick 
 
   const content = chapter.content || '';
 
-  // ==== 章节加载后自动首行缩进 ====
+  // ==== 章节加载后自动首行缩进（仅初次加载时执行）====
+  const initialIndentDone = useRef(false);
+
   useEffect(() => {
-    // 等store初始化完成 + 新章节 + 内容就绪
+    indentDoneRef.current = null;
+    initialIndentDone.current = false;
+  }, [chapter.id]);
+
+  useEffect(() => {
     if (!initialized) return;
-    if (indentDoneRef.current === chapter.id) return;
+    if (initialIndentDone.current) return;
+    initialIndentDone.current = true;
+
     if (content === undefined || content === null) return;
 
-    // 空章节也标记处理，但给一个初始缩进
+    // 空章节给初始缩进
     if (content === '') {
       updateChapterContent(bookId, chapter.id, INDENT);
-      indentDoneRef.current = chapter.id;
       return;
     }
 
     const lines = content.split('\n');
-    const needsIndent = lines.some(line => {
-      const t = line.trim();
-      return t.length > 0 && !line.startsWith(INDENT);
-    });
+    // 已有缩进的段落，尊重用户原有格式，不再处理
+    const hasAnyIndent = lines.some(l => l.trim() && l.startsWith(INDENT));
+    if (hasAnyIndent) return;
 
-    if (needsIndent) {
-      const fixed = lines.map(line => {
-        if (line.trim().length === 0) return line;
-        if (line.startsWith(INDENT)) return line;
-        return INDENT + line.replace(/^\s*/, '');
-      }).join('\n');
-      updateChapterContent(bookId, chapter.id, fixed);
-    }
-    indentDoneRef.current = chapter.id;
-  }, [initialized, chapter.id, content]);
+    // 只处理完全没有任何缩进的段落
+    const fixed = lines.map(line =>
+      line.trim().length === 0 ? line : INDENT + line.replace(/^\s*/, '')
+    ).join('\n');
+    updateChapterContent(bookId, chapter.id, fixed);
+  }, [initialized]); // 只依赖 initialized，消除 content 循环风险
 
   // ==== 查找 ====
   const doFind = useCallback((search) => {

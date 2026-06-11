@@ -1,4 +1,17 @@
 {
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "sk-feefcd6a2b164cd1af57d607eb719353",
+    "ANTHROPIC_MODEL": "deepseek-v4-pro",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-v4-pro[1M]",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "deepseek-v4-pro",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-v4-pro[1M]",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "deepseek-v4-pro",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-v4-flash",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "deepseek-v4-flash",
+    "CLAUDE_CODE_EFFORT_LEVEL": "max"
+  },
+  "model": "deepseek-v4-pro",
   "permissions": {
     "allow": [
       "Bash(powershell -ExecutionPolicy Bypass -File \"d:\\\\BaiduNetdiskDownload\\\\小说文件助手\\\\check-status.ps1\")",
@@ -55,12 +68,29 @@
       "Bash(fuser 5173/tcp)",
       "Bash(fuser -k 5173/tcp)",
       "Bash(powershell -Command \"Set-Content -Path 'd:\\\\BaiduNetdiskDownload\\\\小说文件助手\\\\启动.bat' -Value '@echo off', 'cd /d \\\\\"%~dp0\\\\\"', 'start \\\\\"小说助手\\\\\" cmd /c \\\\\"npx vite preview --port 3000 --host\\\\\"', 'timeout /t 3 /nobreak >nul', 'start \\\\\"公网链接\\\\\" cmd /c \\\\\"npx localtunnel --port 3000\\\\\"', 'echo.', 'echo   等「公网链接」窗口显示 your url is: https://xxx.loca.lt', 'echo   手机打开那个链接，密码 219.131.9.74', 'echo.', 'pause' -Encoding Default\")",
-      "Bash(powershell -Command \"Set-Content -Path 'd:\\\\BaiduNetdiskDownload\\\\小说文件助手\\\\启动.bat' -Value '@echo off', 'cd /d \\\\\"%~dp0\\\\\"', 'start \\\\\"小说助手\\\\\" cmd /c \\\\\"npm run serve\\\\\"', 'timeout /t 2 /nobreak >nul', 'start \\\\\"公网链接\\\\\" cmd /c \\\\\"npx localtunnel --port 3000\\\\\"', 'echo.', 'echo   等公网链接窗口显示 your url 即可', 'echo   手机打开那个链接，密码 219.131.9.74', 'echo.', 'pause' -Encoding Default\")"
+      "Bash(powershell -Command \"Set-Content -Path 'd:\\\\BaiduNetdiskDownload\\\\小说文件助手\\\\启动.bat' -Value '@echo off', 'cd /d \\\\\"%~dp0\\\\\"', 'start \\\\\"小说助手\\\\\" cmd /c \\\\\"npm run serve\\\\\"', 'timeout /t 2 /nobreak >nul', 'start \\\\\"公网链接\\\\\" cmd /c \\\\\"npx localtunnel --port 3000\\\\\"', 'echo.', 'echo   等公网链接窗口显示 your url 即可', 'echo   手机打开那个链接，密码 219.131.9.74', 'echo.', 'pause' -Encoding Default\")",
+      "Read(//c/Users/11694/.claude/**)",
+      "Bash(env)",
+      "WebFetch(domain:ckff.dev)",
+      "Bash(curl -s https://api.68886868.xyz/v1/models -H \"Authorization: Bearer sk-7AnrpS2eZL9vt8B7x1f6hGuaMgAekSS5IpYAivzXchqhAOiJ\")",
+      "Bash(curl -s https://api.68886868.xyz/v1/messages -H 'x-api-key: sk-7AnrpS2eZL9vt8B7x1f6hGuaMgAekSS5IpYAivzXchqhAOiJ' -H 'anthropic-version: 2023-06-01' -H 'Content-Type: application/json' -d '{\"model\":\"[反重力3次] claude-opus-4-6-thinking [不补]\",\"max_tokens\":50,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}')",
+      "Bash(curl -s https://api.68886868.xyz/v1/messages -H 'x-api-key: sk-7AnrpS2eZL9vt8B7x1f6hGuaMgAekSS5IpYAivzXchqhAOiJ' -H 'anthropic-version: 2023-06-01' -H 'Content-Type: application/json' -d '{\"model\":\"claude-opus-4-6\",\"max_tokens\":50,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}')",
+      "Bash(curl -s https://api.68886868.xyz/v1/messages -H 'x-api-key: sk-7AnrpS2eZL9vt8B7x1f6hGuaMgAekSS5IpYAivzXchqhAOiJ' -H 'anthropic-version: 2023-06-01' -H 'Content-Type: application/json' -d '{\"model\":\"claude-opus-4-6[1m]\",\"max_tokens\":50,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}')",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://ckff.dev/v1\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://ckff.dev/api\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://ckff.dev/\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.68886868.xyz/v1\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.68886868.xyz/\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://ckff.dev/v1/models\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://ckff.dev/v1/chat/completions\" -H \"Authorization: Bearer sk-7AnrpS2eZL9vt8B7x1f6hGuaMgAekSS5IpYAivzXchqhAOiJ\")",
+      "Bash(curl -s https://api.68886868.xyz/v1/messages -H 'x-api-key: sk-7AnrpS2eZL9vt8B7x1f6hGuaMgAekSS5IpYAivzXchqhAOiJ' -H 'anthropic-version: 2023-06-01' -H 'Content-Type: application/json' -d '{\"model\":\"claude-opus-4-8\",\"max_tokens\":50,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}')",
+      "Bash(curl -s https://api.68886868.xyz/v1/messages -H 'x-api-key: sk-7AnrpS2eZL9vt8B7x1f6hGuaMgAekSS5IpYAivzXchqhAOiJ' -H 'anthropic-version: 2023-06-01' -H 'Content-Type: application/json' -d '{\"model\":\"claude-opus-4-6-thinking\",\"max_tokens\":50,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}')"
     ],
     "additionalDirectories": [
       "C:\\Users\\11694\\AppData\\Local\\Temp",
       "D:\\你怎么知道我是垃圾站",
-      "D:\\"
+      "D:\\",
+      "C:\\Users\\11694\\.claude"
     ]
   }
 }

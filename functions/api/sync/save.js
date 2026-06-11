@@ -23,13 +23,22 @@ export async function onRequest({ request, env }) {
 
     await Promise.all(tasks);
 
-    const allKeys = (await env.SYNC.list({ prefix: 'history_' })).keys.map(k => k.name);
-    const sorted = allKeys.sort((a, b) => {
+    // 清理超出上限的旧版本（处理 KV list() 翻页）
+    const MAX_HISTORY = 20;
+    let allHistoryKeys = [];
+    let cursor;
+    do {
+      const result = await env.SYNC.list({ prefix: 'history_', cursor });
+      allHistoryKeys.push(...result.keys.map(k => k.name));
+      cursor = result.list_complete ? null : result.cursor;
+    } while (cursor);
+
+    const sorted = allHistoryKeys.sort((a, b) => {
       const ta = parseInt(a.replace('history_', ''), 10);
       const tb = parseInt(b.replace('history_', ''), 10);
       return tb - ta;
     });
-    const toDelete = sorted.slice(20);
+    const toDelete = sorted.slice(MAX_HISTORY);
     if (toDelete.length > 0) {
       await Promise.all(toDelete.map(key => env.SYNC.delete(key)));
     }

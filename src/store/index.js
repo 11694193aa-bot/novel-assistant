@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { saveData, loadData, saveHistory, saveSplash, loadSplash, isSyncing } from '../utils/storage';
+import { saveData, loadData, saveSplash, loadSplash, removeSplash, isSyncing } from '../utils/storage';
 
 // 生成唯一ID
 export const uid = () => crypto.randomUUID ? crypto.randomUUID() :
@@ -42,6 +42,7 @@ const useStore = create((set, get) => ({
     const data = await loadData(SAVE_KEY);
     // 独立加载开屏图
     const splashImage = loadSplash();
+    const fromCloud = data?._source === 'cloud';
     if (data) {
       set({
         books: data.books || [],
@@ -51,6 +52,7 @@ const useStore = create((set, get) => ({
         dailyCounts: data.dailyCounts || {},
         trash: data.trash || [],
         initialized: true,
+        toast: fromCloud ? { text: '已从云端同步数据', ts: Date.now() } : null,
       });
     } else {
       set({ initialized: true, settings: { ...defaultSettings, splashImage } });
@@ -63,9 +65,15 @@ const useStore = create((set, get) => ({
     const { books, inspirationCards, aiConversations, settings, dailyCounts, trash } = get();
     const { splashImage, ...settingsWithoutSplash } = settings;
     const data = { books, inspirationCards, aiConversations, settings: settingsWithoutSplash, dailyCounts, trash };
+    // saveData 内部已处理 IndexedDB + 本地历史 + 云同步（防抖）
     await saveData(SAVE_KEY, data);
-    if (splashImage) saveSplash(splashImage); else { try { localStorage.removeItem('novel_splash'); } catch (_) {} }
-    await saveHistory(SAVE_KEY, data, Date.now());
+    // splashImage 独立存储（不进主数据同步流）
+    if (splashImage) {
+      saveSplash(splashImage);
+    } else {
+      removeSplash();
+    }
+    // 移除重复的 saveHistory：本地历史已由 saveData 内部处理；云端历史由 Worker save.js 管理
     set({ dirty: false });
     if (!silent) set({ toast: { text: '已同步到云端', ts: Date.now() } });
   },

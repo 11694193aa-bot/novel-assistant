@@ -2,7 +2,7 @@ export async function onRequest({ request, env }) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Content-Type': 'application/json',
   };
   if (request.method === 'OPTIONS') return new Response(null, { headers });
@@ -10,9 +10,14 @@ export async function onRequest({ request, env }) {
   try {
     const { messages, chapterContent } = await request.json();
 
-    let apiKey = await env.SYNC.get('api_key');
+    // 优先从请求头取 Key，KV 仅做兜底（向下兼容）
+    const authHeader = request.headers.get('Authorization') || '';
+    let apiKey = authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7).trim()
+      : await env.SYNC.get('api_key');
+
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: '请先在 AI 对话页面配置 API Key' }), { status: 400, headers });
+      return new Response(JSON.stringify({ error: '请先配置 API Key' }), { status: 401, headers });
     }
 
     const systemPrompt = chapterContent

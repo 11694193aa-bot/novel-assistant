@@ -1,0 +1,7 @@
+name = "novel-assistant"
+pages_build_output_dir = "dist"
+
+# Cloudflare KV 命名空间绑定 — 用于云端数据同步
+[[kv_namespaces]]
+binding = "SYNC"
+id = "61805a556aba433c802949f2e5f32cf1"

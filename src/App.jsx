@@ -83,14 +83,6 @@ export default function App() {
 
   useEffect(() => { init(); }, []);
 
-  // App 启动时同步云端并提示
-  useEffect(() => {
-    if (initialized) {
-      const { showToast } = useStore.getState();
-      showToast('已从云端同步数据');
-    }
-  }, [initialized]);
-
   useEffect(() => {
     if (books.length > 0 && !selectedBookId) setSelectedBookId(books[0].id);
   }, [books, selectedBookId]);
