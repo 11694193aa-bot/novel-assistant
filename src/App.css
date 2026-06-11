@@ -930,7 +930,7 @@ ul.tree { padding-left:0; }
   .tree-node { max-width:85vw; padding:10px 14px; font-size:12px; border-radius:10px; min-width:200px; }
   .tree-text-node { max-width:82vw; }
   .tree-edit-content { min-width:200px; }
-  .tree-node-add { width:28px; height:28px; right:-14px; font-size:17px; line-height:28px; opacity:1; }
+  .tree-node-add { width:22px; height:22px; right:-11px; font-size:14px; line-height:22px; opacity:1; }
   .tree-menu-handle { opacity:.5; font-size:13px; padding:4px 6px; }
   .tree-collapse-btn { width:22px; height:22px; font-size:9px; left:-14px; }
   .tree-zoom-controls { bottom:12px; padding:5px 10px; gap:4px; }

@@ -571,6 +571,8 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
           )}
           <span className="tree-menu-handle"
             onClick={(e) => { e.stopPropagation(); showMenu(e); }}
+            onTouchStart={(e) => { e.stopPropagation(); }}
+            onTouchMove={(e) => { e.stopPropagation(); }}
             onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); showMenu(e); }}
             title="菜单">⋯</span>
           {isEditing ? (
@@ -963,11 +965,11 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
             <span className="mm-action-icon"><CatIcon name="focus" size={20} /></span>
             <span className="mm-action-label">专注</span>
           </button>
-          <button className="mm-action-btn" onClick={() => fileInputRef.current?.click()} disabled={!selectedBookId} title="导入文件">
+          <button className="mm-action-btn btn-import" onClick={() => fileInputRef.current?.click()} disabled={!selectedBookId} title="导入文件">
             <span className="mm-action-icon"><CatIcon name="import" size={20} /></span>
             <span className="mm-action-label">导入</span>
           </button>
-          <button className="mm-action-btn" onClick={handleAddParent} disabled={!selectedBookId} title="新建母卡片">
+          <button className="mm-action-btn btn-add-card" onClick={handleAddParent} disabled={!selectedBookId} title="新建母卡片">
             <span className="mm-action-icon"><CatIcon name="add" size={20} /></span>
             <span className="mm-action-label">添加</span>
           </button>
