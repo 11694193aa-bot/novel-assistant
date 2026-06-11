@@ -87,6 +87,66 @@ export default function App() {
     if (books.length > 0 && !selectedBookId) setSelectedBookId(books[0].id);
   }, [books, selectedBookId]);
 
+  // ====== History API：阻止手机端右划/返回键直接退出 APP ======
+  const historyInited = useRef(false);
+  const handlingPopstate = useRef(false);
+
+  // 把当前所有导航状态序列化进 history
+  const pushHistory = useCallback((tab, drill, inspDrill) => {
+    if (handlingPopstate.current) return; // popstate 回调里不重复推
+    const state = {
+      tab: tab !== undefined ? tab : activeTab,
+      drill: drill !== undefined ? drill : mindmapDrillId,
+      inspDrill: inspDrill !== undefined ? inspDrill : inspDrillId,
+    };
+    // 首次用 replaceState 避免多一个初始记录
+    if (!historyInited.current) {
+      historyInited.current = true;
+      history.replaceState(state, '');
+    } else {
+      history.pushState(state, '');
+    }
+  }, [activeTab, mindmapDrillId, inspDrillId]);
+
+  // 初始化首条历史
+  useEffect(() => {
+    if (!initialized) return;
+    if (!historyInited.current) pushHistory();
+  }, [initialized]);
+
+  // 监听系统返回（右划/物理返回键）
+  useEffect(() => {
+    const onPop = (e) => {
+      if (!e.state) return; // 无状态不处理
+      handlingPopstate.current = true;
+      setActiveTab(e.state.tab || 'directory');
+      setMindmapDrillId(e.state.drill || null);
+      setInspDrillId(e.state.inspDrill || null);
+      setTimeout(() => { handlingPopstate.current = false; }, 0);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  // 封装导航：切 tab 时自动 push history
+  const navigateTab = useCallback((tab) => {
+    setActiveTab(tab);
+    setMindmapDrillId(null);
+    setInspDrillId(null);
+    // 在 effect 之后的微任务里 push，确保 state 已更新
+    setTimeout(() => pushHistory(tab, null, null), 0);
+  }, [pushHistory]);
+
+  const navigateMindmapDrill = useCallback((id) => {
+    setMindmapDrillId(id);
+    setTimeout(() => pushHistory(activeTab, id, inspDrillId), 0);
+  }, [pushHistory, activeTab, inspDrillId]);
+
+  const navigateInspDrill = useCallback((id) => {
+    setInspDrillId(id);
+    setTimeout(() => pushHistory(activeTab, mindmapDrillId, id), 0);
+  }, [pushHistory, activeTab, mindmapDrillId]);
+
   // 切换回目录时自动保存并同步云端
   const prevTabRef = useRef(activeTab);
   useEffect(() => {
@@ -173,7 +233,7 @@ export default function App() {
         <div style={{display: activeTab === 'directory' ? 'flex' : 'none', flex:1, flexDirection:'column', height:'100%'}}>
           <MobileStack
             activeMainTab={activeTab}
-            onTabChange={setActiveTab}
+            onTabChange={navigateTab}
             onGachaClick={() => setGachaOpen(true)}
             onQuickNote={() => setQuickNoteOpen(true)}
             onFilmNote={() => setFilmNoteOpen(true)}
@@ -185,15 +245,15 @@ export default function App() {
         {/* 思维导图全屏页 */}
         {activeTab === 'mindmap' && (
           mindmapDrillId ? (
-            <MobileFullPage title="思维导图" onBack={() => setMindmapDrillId(null)}>
+            <MobileFullPage title="思维导图" onBack={() => navigateMindmapDrill(null)}>
               <Suspense fallback={<Loader />}><MindMapView books={books} selectedBookId={selectedBookId} onSelectBook={setSelectedBookId}
-                focusCardId={mindmapDrillId} onFocusCard={setMindmapDrillId} isMobile /></Suspense>
+                focusCardId={mindmapDrillId} onFocusCard={navigateMindmapDrill} isMobile /></Suspense>
             </MobileFullPage>
           ) : (
-            <MobileFullPage title="思维导图" onBack={() => setActiveTab('directory')}
+            <MobileFullPage title="思维导图" onBack={() => navigateTab('directory')}
               actions={<><button className="tb-btn" onClick={() => document.querySelector('.btn-add-card')?.click()} title="新建母卡片" style={{fontSize:18,fontWeight:700,padding:'2px 8px'}}>＋</button><button className="tb-btn" onClick={() => document.querySelector('.btn-import')?.click()} title="导入文件" style={{fontSize:15,padding:'2px 8px'}}>📥</button></>}>
               <Suspense fallback={<Loader />}><MindMapView books={books} selectedBookId={selectedBookId} onSelectBook={setSelectedBookId}
-                onFocusCard={setMindmapDrillId} isMobile /></Suspense>
+                onFocusCard={navigateMindmapDrill} isMobile /></Suspense>
             </MobileFullPage>
           )
         )}
@@ -201,20 +261,20 @@ export default function App() {
         {/* 灵感卡片全屏页 */}
         {activeTab === 'inspiration' && (
           inspDrillId ? (
-            <MobileFullPage title="灵感卡片" count={inspCount} onBack={() => setInspDrillId(null)}>
-              <Suspense fallback={<Loader />}><InspirationView books={books} drillCardId={inspDrillId} onBack={() => setInspDrillId(null)} onCountChange={setInspCount} /></Suspense>
+            <MobileFullPage title="灵感卡片" count={inspCount} onBack={() => navigateInspDrill(null)}>
+              <Suspense fallback={<Loader />}><InspirationView books={books} drillCardId={inspDrillId} onBack={() => navigateInspDrill(null)} onCountChange={setInspCount} /></Suspense>
             </MobileFullPage>
           ) : (
-            <MobileFullPage title="灵感卡片" count={inspCount} onBack={() => setActiveTab('directory')}
+            <MobileFullPage title="灵感卡片" count={inspCount} onBack={() => navigateTab('directory')}
               actions={<><button className="tb-btn" onClick={() => document.getElementById('insp-import-file')?.click()}>导入</button></>}>
-              <Suspense fallback={<Loader />}><InspirationView books={books} onDrillCard={setInspDrillId} isMobile onCountChange={setInspCount} /></Suspense>
+              <Suspense fallback={<Loader />}><InspirationView books={books} onDrillCard={navigateInspDrill} isMobile onCountChange={setInspCount} /></Suspense>
             </MobileFullPage>
           )
         )}
 
         {/* AI 对话全屏页 */}
         {activeTab === 'aichat' && (
-          <MobileFullPage title="AI 对话" onBack={() => setActiveTab('directory')}>
+          <MobileFullPage title="AI 对话" onBack={() => navigateTab('directory')}>
             <Suspense fallback={<Loader />}><AIChatView chapterContent={selectedChapter?.content || null}
               chapterTitle={selectedChapter?.title || null} /></Suspense>
           </MobileFullPage>
@@ -222,7 +282,7 @@ export default function App() {
 
         {/* 设置全屏页 */}
         {activeTab === 'settings' && (
-          <MobileFullPage title="设置" onBack={() => setActiveTab('directory')}>
+          <MobileFullPage title="设置" onBack={() => navigateTab('directory')}>
             <Suspense fallback={<Loader />}><SettingsPanel /></Suspense>
           </MobileFullPage>
         )}

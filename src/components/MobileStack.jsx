@@ -110,6 +110,9 @@ export default function MobileStack({
     prevPageRef.current = page;
   }, [page]);
 
+  // 是否正在处理 popstate（避免重复 push）
+  const handlingPop = useRef(false);
+
   // 导航方法
   const pushPage = useCallback((newPage) => {
     if (animating) return;
@@ -117,6 +120,9 @@ export default function MobileStack({
     setAnimating(true);
     setPageHistory(prev => [...prev, page]);
     setPage(newPage);
+    if (!handlingPop.current) {
+      history.pushState({ msPage: newPage }, '');
+    }
     setTimeout(() => setAnimating(false), 300);
   }, [page, animating]);
 
@@ -129,6 +135,19 @@ export default function MobileStack({
     setPage(prev);
     setTimeout(() => setAnimating(false), 300);
   }, [animating, pageHistory]);
+
+  // 监听系统返回键/右划：回退 MobileStack 内部页面
+  useEffect(() => {
+    const onPop = (e) => {
+      if (e.state?.msPage && pageHistory.length > 0) {
+        handlingPop.current = true;
+        popPage();
+        setTimeout(() => { handlingPop.current = false; }, 100);
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [pageHistory.length, popPage]);
 
   // 手机端禁用长按菜单（避免和拖拽冲突）
   useEffect(() => {
