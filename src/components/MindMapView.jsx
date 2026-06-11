@@ -136,7 +136,7 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
   // ================================================================
   //  移动端触摸拖拽 — 纯文档级事件委托，零冲突
   // ================================================================
-  const tdRef = useRef({ active: false, cardId: null, ghost: null, sx: 0, sy: 0, card: null });
+  const tdRef = useRef({ active: false, cardId: null, ghost: null, sx: 0, sy: 0, lx: 0, ly: 0, card: null });
   const tdTimer = useRef(null);
 
   const tdClear = () => {
@@ -205,6 +205,7 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
       if (!card) return;
       tdClear();
       tdRef.current.sx = t.clientX; tdRef.current.sy = t.clientY;
+      tdRef.current.lx = t.clientX; tdRef.current.ly = t.clientY;
       tdRef.current.cardId = cardId; tdRef.current.card = card;
       tdTimer.current = setTimeout(() => {
         const ghost = document.createElement('div');
@@ -231,14 +232,18 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
       }
       e.preventDefault();
       const t = e.touches[0];
+      tdRef.current.lx = t.clientX; tdRef.current.ly = t.clientY; // 保存最后坐标
       if (tdRef.current.ghost) { tdRef.current.ghost.style.left = (t.clientX - 40) + 'px'; tdRef.current.ghost.style.top = (t.clientY - 20) + 'px'; }
       tdHitTest(t.clientX, t.clientY, tdRef.current.cardId);
     };
     const onEnd = (e) => {
       clearTimeout(tdTimer.current); tdTimer.current = null;
       if (!tdRef.current.active) return;
+      // touchend 坐标不可靠？用 touchmove 最后保存的坐标兜底
       const t = e.changedTouches[0];
-      tdExecute(t.clientX, t.clientY);
+      const cx = t.clientX || tdRef.current.lx;
+      const cy = t.clientY || tdRef.current.ly;
+      tdExecute(cx, cy);
       tdClear();
     };
     const onCancel = () => tdClear();
