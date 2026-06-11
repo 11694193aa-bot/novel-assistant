@@ -671,8 +671,8 @@ body {
 
 /* 手机端：树节点和卡片加宽 */
 @media(max-width:768px) {
-  .tree-node { max-width:96vw !important; min-width:200px; width:fit-content; width:-moz-fit-content; }
-  .tree-text-node { max-width:96vw !important; width:fit-content; width:-moz-fit-content; }
+  .tree-node { max-width:92vw !important; min-width:280px; width:fit-content; width:-moz-fit-content; }
+  .tree-text-node { max-width:90vw !important; width:fit-content; width:-moz-fit-content; }
   .tree-edit-content { min-width:240px; }
   .mm-card.mm-parent { max-width:96vw; min-width:260px; }
   .mm-card.mm-child { max-width:94vw; margin-left:8px !important; min-width:240px; }
@@ -755,8 +755,8 @@ ul.tree { padding-left:0; }
   box-shadow:
     0 1px 3px rgba(0,0,0,.04),
     0 3px 12px rgba(0,0,0,.05);
-  min-width:240px;
-  max-width:5000px;
+  min-width:400px;
+  max-width:700px;
   width:fit-content;
   width:-moz-fit-content;
   line-height:1.8;
@@ -927,8 +927,8 @@ ul.tree { padding-left:0; }
   .tree-zoom-container { padding:24px 20px 80px 20px; }
   .tree, .tree ul { padding-left:28px; }
   .tree li { padding:6px 0; }
-  .tree-node { max-width:85vw; padding:10px 14px; font-size:12px; border-radius:10px; min-width:200px; }
-  .tree-text-node { max-width:82vw; }
+  .tree-node { max-width:92vw; padding:10px 14px; font-size:12px; border-radius:10px; min-width:280px; }
+  .tree-text-node { max-width:90vw; }
   .tree-edit-content { min-width:200px; }
   .tree-node-add { width:22px; height:22px; right:-11px; font-size:14px; line-height:22px; opacity:1; }
   .tree-menu-handle { opacity:.5; font-size:12px; padding:1px 3px; top:-14px; left:14px; }
