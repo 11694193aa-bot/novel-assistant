@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { saveData, loadData, saveSplash, loadSplash, removeSplash, isSyncing } from '../utils/storage';
+import { saveData, loadData, saveSplash, loadSplash, removeSplash, isSyncing, flushCloudSync } from '../utils/storage';
 
 // 生成唯一ID
 export const uid = () => crypto.randomUUID ? crypto.randomUUID() :
@@ -61,11 +61,11 @@ const useStore = create((set, get) => ({
 
   // ============ 持久化 ============
   persist: async (silent = false) => {
-    if (!silent) set({ toast: { text: '正在保存，请勿退出...', ts: Date.now() } });
+    if (!silent) set({ toast: { text: '正在保存...', ts: Date.now() } });
     const { books, inspirationCards, aiConversations, settings, dailyCounts, trash } = get();
     const { splashImage, ...settingsWithoutSplash } = settings;
     const data = { books, inspirationCards, aiConversations, settings: settingsWithoutSplash, dailyCounts, trash };
-    // saveData 内部已处理 IndexedDB + 本地历史 + 云同步（防抖）
+    // 先写本地 IndexedDB（saveData 内部），再立即云同步（不等 15 秒防抖）
     await saveData(SAVE_KEY, data);
     // splashImage 独立存储（不进主数据同步流）
     if (splashImage) {
@@ -73,9 +73,11 @@ const useStore = create((set, get) => ({
     } else {
       removeSplash();
     }
-    // 移除重复的 saveHistory：本地历史已由 saveData 内部处理；云端历史由 Worker save.js 管理
+    // 立即触发云同步，不依赖防抖定时器
+    const stamped = { ...data, _updatedAt: Date.now() };
+    const ok = await flushCloudSync(stamped);
     set({ dirty: false });
-    if (!silent) set({ toast: { text: '已同步到云端', ts: Date.now() } });
+    if (!silent) set({ toast: { text: ok ? '已同步到云端' : '已保存到本地', ts: Date.now() } });
   },
 
   markDirty: () => set({ dirty: true }),

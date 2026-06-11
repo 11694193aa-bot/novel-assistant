@@ -12,23 +12,29 @@ function unlockSync() { _syncing = false; }
 
 function scheduleCloudSync(stamped) {
   clearTimeout(_syncTimer);
-  _syncTimer = setTimeout(async () => {
-    if (_syncing) return;
-    _syncing = true;
-    try {
-      const icons = stamped.settings?.customIcons || {};
-      const cloudPayload = {
-        ...stamped,
-        settings: { ...(stamped.settings || {}), customIcons: undefined },
-        icons,
-      };
-      await Promise.race([cloudSave(cloudPayload), new Promise(r => setTimeout(() => r(false), 8000))]);
-    } catch (e) {
-      console.error('云端同步失败:', e.message);
-    } finally {
-      _syncing = false;
-    }
-  }, CLOUD_DEBOUNCE_MS);
+  _syncTimer = setTimeout(() => flushCloudSync(stamped), CLOUD_DEBOUNCE_MS);
+}
+
+// 立即云同步（persist 手动保存调用，不等防抖）
+export async function flushCloudSync(stamped) {
+  clearTimeout(_syncTimer);
+  if (_syncing) return false;
+  _syncing = true;
+  try {
+    const icons = stamped.settings?.customIcons || {};
+    const cloudPayload = {
+      ...stamped,
+      settings: { ...(stamped.settings || {}), customIcons: undefined },
+      icons,
+    };
+    await Promise.race([cloudSave(cloudPayload), new Promise(r => setTimeout(() => r(false), 8000))]);
+    return true;
+  } catch (e) {
+    console.error('云端同步失败:', e.message);
+    return false;
+  } finally {
+    _syncing = false;
+  }
 }
 
 // ========== 核心存储（IndexedDB为主，localStorage降级） ==========

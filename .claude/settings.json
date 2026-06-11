@@ -11,7 +11,6 @@
     "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "deepseek-v4-flash",
     "CLAUDE_CODE_EFFORT_LEVEL": "max"
   },
-  "model": "deepseek-v4-pro",
   "permissions": {
     "allow": [
       "Bash(powershell -ExecutionPolicy Bypass -File \"d:\\\\BaiduNetdiskDownload\\\\小说文件助手\\\\check-status.ps1\")",
@@ -84,7 +83,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://ckff.dev/v1/models\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://ckff.dev/v1/chat/completions\" -H \"Authorization: Bearer sk-7AnrpS2eZL9vt8B7x1f6hGuaMgAekSS5IpYAivzXchqhAOiJ\")",
       "Bash(curl -s https://api.68886868.xyz/v1/messages -H 'x-api-key: sk-7AnrpS2eZL9vt8B7x1f6hGuaMgAekSS5IpYAivzXchqhAOiJ' -H 'anthropic-version: 2023-06-01' -H 'Content-Type: application/json' -d '{\"model\":\"claude-opus-4-8\",\"max_tokens\":50,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}')",
-      "Bash(curl -s https://api.68886868.xyz/v1/messages -H 'x-api-key: sk-7AnrpS2eZL9vt8B7x1f6hGuaMgAekSS5IpYAivzXchqhAOiJ' -H 'anthropic-version: 2023-06-01' -H 'Content-Type: application/json' -d '{\"model\":\"claude-opus-4-6-thinking\",\"max_tokens\":50,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}')"
+      "Bash(curl -s https://api.68886868.xyz/v1/messages -H 'x-api-key: sk-7AnrpS2eZL9vt8B7x1f6hGuaMgAekSS5IpYAivzXchqhAOiJ' -H 'anthropic-version: 2023-06-01' -H 'Content-Type: application/json' -d '{\"model\":\"claude-opus-4-6-thinking\",\"max_tokens\":50,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}')",
+      "Bash(curl -s -X POST \"https://defce15a.novel-assistant-drf.pages.dev/api/sync/load\" -H \"Content-Type: application/json\" -d '{}')"
     ],
     "additionalDirectories": [
       "C:\\Users\\11694\\AppData\\Local\\Temp",
@@ -92,5 +92,6 @@
       "D:\\",
       "C:\\Users\\11694\\.claude"
     ]
-  }
+  },
+  "model": "deepseek-v4-pro"
 }
