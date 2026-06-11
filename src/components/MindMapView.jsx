@@ -167,32 +167,36 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
   const lastHit = useRef(null);
 
   const tdHitTest = (cx, cy, dragId) => {
-    // elementsFromPoint 穿透所有层找 .tree-node
-    const els = document.elementsFromPoint(cx, cy);
-    const node = els.find(el => el.closest('.tree-node'))?.closest('.tree-node');
-    if (!node) {
-      // 找不到时保持上一个有效目标
-      if (lastHit.current) {
-        setTreeDropTarget({ id: lastHit.current.tid, pos: lastHit.current.pos });
-        return lastHit.current;
+    // 遍历所有树节点，用 getBoundingClientRect 数学判定——不依赖 elementFromPoint
+    const allNodes = document.querySelectorAll('.tree-node:not(.tree-root-node)');
+    let best = null;
+    for (const node of allNodes) {
+      const r = node.getBoundingClientRect();
+      if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) {
+        const tid = node.dataset.cardId;
+        if (!tid || tid === dragId || isAncestorOf(dragId, tid)) continue;
+        // 选面积最小的（最内层/最具体的节点）
+        const area = r.width * r.height;
+        if (!best || area < best.area) {
+          const ry = cy - r.top;
+          const band = Math.max(r.height * 0.2, 12);
+          const pos = ry < band ? 'before' : ry > r.height - band ? 'after' : 'inside';
+          best = { tid, pos, area };
+        }
       }
-      setTreeDropTarget(null);
-      return null;
     }
-    const tid = node.dataset.cardId;
-    if (!tid || tid === dragId || isAncestorOf(dragId, tid)) {
-      setTreeDropTarget(null);
-      lastHit.current = null;
-      return null;
+    if (best) {
+      setTreeDropTarget({ id: best.tid, pos: best.pos });
+      lastHit.current = { tid: best.tid, pos: best.pos };
+      return { tid: best.tid, pos: best.pos };
     }
-    const r = node.getBoundingClientRect();
-    const ry = cy - r.top;
-    // 缩小时 inside 区域不够 → 放宽中间区域比例
-    const band = Math.max(r.height * 0.2, 12);
-    let pos = ry < band ? 'before' : ry > r.height - band ? 'after' : 'inside';
-    setTreeDropTarget({ id: tid, pos });
-    lastHit.current = { tid, pos };
-    return { tid, pos };
+    // 兜底
+    if (lastHit.current) {
+      setTreeDropTarget({ id: lastHit.current.tid, pos: lastHit.current.pos });
+      return lastHit.current;
+    }
+    setTreeDropTarget(null);
+    return null;
   };
 
   const tdExecute = (cx, cy) => {
@@ -227,7 +231,7 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
       tdRef.current.sx = t.clientX; tdRef.current.sy = t.clientY;
       tdRef.current.lx = t.clientX; tdRef.current.ly = t.clientY;
       tdRef.current.cardId = cardId;
-      // 立即激活拖拽，不等待
+      // 按下即拖，零等待
       const ghost = document.createElement('div');
       ghost.className = 'touch-ghost';
       const label = node.querySelector('.tree-node-content')?.textContent?.trim()
@@ -236,29 +240,15 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
       ghost.textContent = label.slice(0, 8);
       ghost.style.left = (t.clientX - 40) + 'px';
       ghost.style.top = (t.clientY - 20) + 'px';
-      ghost.style.opacity = '0.01';
       document.body.appendChild(ghost);
       tdRef.current.ghost = ghost;
-      // 150ms 内移动超 8px → 取消拖拽（判定为滚动）；否则正式激活
-      tdTimer.current = setTimeout(() => {
-        ghost.style.opacity = '';
-        tdRef.current.active = true;
-        setTreeDragId(cardId);
-        if (navigator.vibrate) navigator.vibrate(15);
-      }, 150);
+      tdRef.current.active = true;
+      setTreeDragId(cardId);
+      if (navigator.vibrate) navigator.vibrate(15);
     };
     const onMove = (e) => {
       const t = e.touches[0];
-      if (!tdRef.current.active) {
-        // 未激活：移动超 8px → 取消（判定为滚动）
-        if (tdTimer.current) {
-          if (Math.abs(t.clientX - tdRef.current.sx) > 8 || Math.abs(t.clientY - tdRef.current.sy) > 8) {
-            clearTimeout(tdTimer.current); tdTimer.current = null;
-            if (tdRef.current.ghost) { try { tdRef.current.ghost.remove(); } catch(_) {} tdRef.current.ghost = null; }
-          }
-        }
-        return;
-      }
+      if (!tdRef.current.active) return;
       e.preventDefault();
       tdRef.current.lx = t.clientX; tdRef.current.ly = t.clientY;
       if (tdRef.current.ghost) { tdRef.current.ghost.style.left = (t.clientX - 40) + 'px'; tdRef.current.ghost.style.top = (t.clientY - 20) + 'px'; }
