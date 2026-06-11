@@ -577,15 +577,13 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
             title="菜单">⋯</span>
           {isEditing ? (
             <>
-              <input className="tree-edit-title" defaultValue={card.title || ''} placeholder="标题..." autoFocus onKeyDown={handleEditKeyDown} onBlur={saveEdit} />
-              <textarea className="tree-edit-content" defaultValue={card.content || ''} placeholder="内容..." onKeyDown={handleEditKeyDown} onInput={handleTextareaInput} onBlur={saveEdit} ref={textareaInitRef} />
+              <textarea className="tree-edit-content" defaultValue={card.content || ''} placeholder="输入内容..." autoFocus onKeyDown={handleEditKeyDown} onInput={handleTextareaInput} onBlur={saveEdit} ref={textareaInitRef} />
               <div className="tree-edit-hint">Ctrl+Enter 保存 · 点击外自动保存</div>
             </>
           ) : (
             <>
-              {hasTitle && <div className="tree-node-title">{card.title}</div>}
               {hasContent && <div className="tree-node-content" style={{whiteSpace:'pre-wrap'}}>{card.content}</div>}
-              {!hasTitle && !hasContent && (
+              {!hasContent && (
                 <div className="tree-node-empty">双击编辑 · 悬停+建子节点</div>
               )}
             </>
