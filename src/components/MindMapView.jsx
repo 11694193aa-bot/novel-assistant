@@ -195,6 +195,8 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     const onStart = (e) => {
       if (e.touches.length > 1) return;
       const t = e.touches[0];
+      // ⋯ 菜单按钮交给 React 处理，不启动拖拽
+      if (e.target.closest('.tree-menu-handle')) return;
       const node = e.target.closest('.tree-node');
       if (!node) return;
       const cardId = node.dataset.cardId;
@@ -247,15 +249,16 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
       tdClear();
     };
     const onCancel = () => tdClear();
-    document.addEventListener('touchstart', onStart, { passive: true });
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('touchend', onEnd);
-    document.addEventListener('touchcancel', onCancel);
+    // capture:true 确保在 React 合成事件之前拦截（⋯ 的 stopPropagation 无法阻止）
+    document.addEventListener('touchstart', onStart, { passive: true, capture: true });
+    document.addEventListener('touchmove', onMove, { passive: false, capture: true });
+    document.addEventListener('touchend', onEnd, { capture: true });
+    document.addEventListener('touchcancel', onCancel, { capture: true });
     return () => {
-      document.removeEventListener('touchstart', onStart);
-      document.removeEventListener('touchmove', onMove);
-      document.removeEventListener('touchend', onEnd);
-      document.removeEventListener('touchcancel', onCancel);
+      document.removeEventListener('touchstart', onStart, { capture: true });
+      document.removeEventListener('touchmove', onMove, { capture: true });
+      document.removeEventListener('touchend', onEnd, { capture: true });
+      document.removeEventListener('touchcancel', onCancel, { capture: true });
     };
   }, [selectedBookId]);
 
