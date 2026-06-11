@@ -416,7 +416,7 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
   const pinchRef = useRef(null);
   const handleTreeTouchStart2 = (e) => {
     if (e.touches.length === 2) {
-      clearTreeTouchDrag();
+      clearTreeTouch();
       clearTouchDrag();
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
