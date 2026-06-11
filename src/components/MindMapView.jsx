@@ -134,188 +134,125 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
   };
 
   // ================================================================
-  //  移动端触摸拖拽 — 纯 DOM 幽灵 + elementFromPoint + rect 比例分区
+  //  移动端触摸拖拽 — 纯文档级事件委托，零冲突
   // ================================================================
-  const touchDrag = useRef({
-    active: false,
-    cardId: null,
-    ghost: null,      // DOM 幽灵节点
-    startX: 0, startY: 0,
-  });
-  const touchTimer = useRef(null);
+  const tdRef = useRef({ active: false, cardId: null, ghost: null, sx: 0, sy: 0, card: null });
+  const tdTimer = useRef(null);
 
-  const clearTreeTouch = () => {
-    clearTimeout(touchTimer.current);
-    touchTimer.current = null;
-    const d = touchDrag.current;
-    if (d.ghost) { d.ghost.remove(); d.ghost = null; }
-    d.active = false; d.cardId = null;
-    setTreeDragId(null);
-    setTreeDropTarget(null);
+  const tdClear = () => {
+    clearTimeout(tdTimer.current); tdTimer.current = null;
+    if (tdRef.current.ghost) { tdRef.current.ghost.remove(); tdRef.current.ghost = null; }
+    tdRef.current.active = false; tdRef.current.cardId = null; tdRef.current.card = null;
+    setTreeDragId(null); setTreeDropTarget(null);
   };
 
-  // 循环嵌套检测：ancestorId 是否是 descendantId 的祖先
+  // 循环嵌套检测
   const isAncestorOf = (ancestorId, descendantId) => {
     const cards = bookRef.current?.mindMapCards || [];
-    const find = (list, targetId) => {
+    const search = (list, id) => {
       for (const c of list) {
-        if (c.id === targetId) return true;
-        if (find(c.children || [], targetId)) return true;
+        if (c.id === id) return true;
+        if (search(c.children || [], id)) return true;
       }
       return false;
     };
-    const descendants = (list, parentId) => {
-      for (const c of list) {
-        if (c.id === parentId) return c.children || [];
-        const r = descendants(c.children || [], parentId);
-        if (r.length) return r;
-      }
+    const getKids = (list, pid) => {
+      for (const c of list) { if (c.id === pid) return c.children || []; const r = getKids(c.children || [], pid); if (r.length) return r; }
       return [];
     };
-    const kids = descendants(cards, ancestorId);
-    return find(kids, descendantId);
+    return search(getKids(cards, ancestorId), descendantId);
   };
 
-  const handleTreeTouchStart = (e, card) => {
-    if (e.touches.length > 1) return;
-    clearTreeTouch();
-    const t = e.touches[0];
-    touchDrag.current.startX = t.clientX;
-    touchDrag.current.startY = t.clientY;
-    touchDrag.current.cardId = card.id;
-    touchTimer.current = setTimeout(() => {
-      // 创建纯 DOM 幽灵
-      const ghost = document.createElement('div');
-      ghost.className = 'touch-ghost';
-      ghost.textContent = card.title?.slice(0, 8) || card.content?.slice(0, 8) || '拖拽中';
-      ghost.style.left = (t.clientX - 40) + 'px';
-      ghost.style.top = (t.clientY - 20) + 'px';
-      document.body.appendChild(ghost);
-      touchDrag.current.ghost = ghost;
-      touchDrag.current.active = true;
-      setTreeDragId(card.id);
-      if (navigator.vibrate) navigator.vibrate(15);
-    }, 500);
-  };
-
-  const handleTreeTouchMove = (e) => {
-    const t = e.touches[0];
-    const d = touchDrag.current;
-    if (!d.active) {
-      if (Math.abs(t.clientX - d.startX) > 10 || Math.abs(t.clientY - d.startY) > 10) {
-        clearTimeout(touchTimer.current);
-        touchTimer.current = null;
-      }
-      return;
-    }
-    e.preventDefault();
-    // 移动幽灵
-    if (d.ghost) { d.ghost.style.left = (t.clientX - 40) + 'px'; d.ghost.style.top = (t.clientY - 20) + 'px'; }
-    // 命中检测
-    const el = document.elementFromPoint(t.clientX, t.clientY);
+  // 命中检测 → 设置视觉指示器
+  const tdHitTest = (cx, cy, dragId) => {
+    const el = document.elementFromPoint(cx, cy);
     const node = el?.closest('.tree-node');
-    if (!node) { setTreeDropTarget(null); return; }
-    const targetId = node.dataset.cardId;
-    if (!targetId || targetId === d.cardId) { setTreeDropTarget(null); return; }
-    // 循环检测：不能拖进自己的子孙
-    if (isAncestorOf(d.cardId, targetId)) { setTreeDropTarget(null); return; }
-    const rect = node.getBoundingClientRect();
-    const relY = t.clientY - rect.top;
-    const h = rect.height;
-    let pos = 'inside';
-    if (relY < h * 0.25) pos = 'before';
-    else if (relY > h * 0.75) pos = 'after';
-    setTreeDropTarget({ id: targetId, pos });
+    if (!node) { setTreeDropTarget(null); return null; }
+    const tid = node.dataset.cardId;
+    if (!tid || tid === dragId || isAncestorOf(dragId, tid)) { setTreeDropTarget(null); return null; }
+    const r = node.getBoundingClientRect();
+    const ry = cy - r.top;
+    let pos = ry < r.height * 0.25 ? 'before' : ry > r.height * 0.75 ? 'after' : 'inside';
+    setTreeDropTarget({ id: tid, pos });
+    return { tid, pos };
   };
 
-  const handleTreeTouchEnd = (e) => {
-    clearTimeout(touchTimer.current);
-    touchTimer.current = null;
-    const d = touchDrag.current;
-    if (!d.active) { clearTreeTouch(); return; }
-    const t = e.changedTouches[0];
-    const el = document.elementFromPoint(t.clientX, t.clientY);
-    const node = el?.closest('.tree-node');
-    if (node) {
-      const targetId = node.dataset.cardId;
-      if (targetId && targetId !== d.cardId && !isAncestorOf(d.cardId, targetId)) {
-        const rect = node.getBoundingClientRect();
-        const relY = t.clientY - rect.top;
-        const h = rect.height;
-        let pos = 'inside';
-        if (relY < h * 0.25) pos = 'before';
-        else if (relY > h * 0.75) pos = 'after';
-        if (pos === 'inside') {
-          moveMindMapCard(selectedBookId, d.cardId, targetId);
-          setCollapsedNodes(prev => { const next = new Set(prev); next.delete(targetId); return next; });
-        } else {
-          reorderMindMapCard(selectedBookId, d.cardId, targetId, pos === 'before');
-        }
-      }
+  const tdExecute = (cx, cy) => {
+    const { cardId } = tdRef.current;
+    if (!cardId) return;
+    const hit = tdHitTest(cx, cy, cardId);
+    if (!hit) return;
+    if (hit.pos === 'inside') {
+      moveMindMapCard(selectedBookId, cardId, hit.tid);
+      setCollapsedNodes(prev => { const n = new Set(prev); n.delete(hit.tid); return n; });
+    } else {
+      reorderMindMapCard(selectedBookId, cardId, hit.tid, hit.pos === 'before');
     }
-    clearTreeTouch();
   };
 
-  // document 级兜底
+  // 唯一入口：文档级 touchstart 事件委托
   useEffect(() => {
-    const onMove = (e) => {
-      if (!touchDrag.current.active) return;
-      e.preventDefault();
+    const onStart = (e) => {
+      if (e.touches.length > 1) return;
       const t = e.touches[0];
-      if (touchDrag.current.ghost) {
-        touchDrag.current.ghost.style.left = (t.clientX - 40) + 'px';
-        touchDrag.current.ghost.style.top = (t.clientY - 20) + 'px';
-      }
-      // 复用 handleTreeTouchMove 的命中逻辑
-      const el = document.elementFromPoint(t.clientX, t.clientY);
-      const node = el?.closest('.tree-node');
-      if (!node) { setTreeDropTarget(null); return; }
-      const targetId = node.dataset.cardId;
-      if (!targetId || targetId === touchDrag.current.cardId) { setTreeDropTarget(null); return; }
-      if (isAncestorOf(touchDrag.current.cardId, targetId)) { setTreeDropTarget(null); return; }
-      const rect = node.getBoundingClientRect();
-      const relY = t.clientY - rect.top;
-      const h = rect.height;
-      let pos = 'inside';
-      if (relY < h * 0.25) pos = 'before';
-      else if (relY > h * 0.75) pos = 'after';
-      setTreeDropTarget({ id: targetId, pos });
+      const node = e.target.closest('.tree-node');
+      if (!node) return;
+      const cardId = node.dataset.cardId;
+      if (!cardId) return;
+      // 从 book 数据中找到卡片对象
+      const findCard = (list, id) => { for (const c of list) { if (c.id === id) return c; const r = findCard(c.children || [], id); if (r) return r; } return null; };
+      const card = findCard(bookRef.current?.mindMapCards || [], cardId);
+      if (!card) return;
+      tdClear();
+      tdRef.current.sx = t.clientX; tdRef.current.sy = t.clientY;
+      tdRef.current.cardId = cardId; tdRef.current.card = card;
+      tdTimer.current = setTimeout(() => {
+        const ghost = document.createElement('div');
+        ghost.className = 'touch-ghost';
+        ghost.textContent = (card.title || card.content || '拖拽中').slice(0, 8);
+        ghost.style.left = (t.clientX - 40) + 'px';
+        ghost.style.top = (t.clientY - 20) + 'px';
+        document.body.appendChild(ghost);
+        tdRef.current.ghost = ghost;
+        tdRef.current.active = true;
+        setTreeDragId(cardId);
+        if (navigator.vibrate) navigator.vibrate(15);
+      }, 500);
     };
-    const onEnd = (e) => {
-      if (!touchDrag.current.active) return;
-      const d = touchDrag.current;
-      const t = e.changedTouches[0];
-      const el = document.elementFromPoint(t.clientX, t.clientY);
-      const node = el?.closest('.tree-node');
-      if (node) {
-        const targetId = node.dataset.cardId;
-        if (targetId && targetId !== d.cardId && !isAncestorOf(d.cardId, targetId)) {
-          const rect = node.getBoundingClientRect();
-          const relY = t.clientY - rect.top;
-          const h = rect.height;
-          let pos = 'inside';
-          if (relY < h * 0.25) pos = 'before';
-          else if (relY > h * 0.75) pos = 'after';
-          if (pos === 'inside') {
-            moveMindMapCard(selectedBookId, d.cardId, targetId);
-            setCollapsedNodes(prev => { const next = new Set(prev); next.delete(targetId); return next; });
-          } else {
-            reorderMindMapCard(selectedBookId, d.cardId, targetId, pos === 'before');
+    const onMove = (e) => {
+      if (!tdRef.current.active) {
+        if (tdTimer.current) {
+          const t = e.touches[0];
+          if (Math.abs(t.clientX - tdRef.current.sx) > 10 || Math.abs(t.clientY - tdRef.current.sy) > 10) {
+            clearTimeout(tdTimer.current); tdTimer.current = null;
           }
         }
+        return;
       }
-      clearTreeTouch();
+      e.preventDefault();
+      const t = e.touches[0];
+      if (tdRef.current.ghost) { tdRef.current.ghost.style.left = (t.clientX - 40) + 'px'; tdRef.current.ghost.style.top = (t.clientY - 20) + 'px'; }
+      tdHitTest(t.clientX, t.clientY, tdRef.current.cardId);
     };
-    const onCancel = () => clearTreeTouch();
+    const onEnd = (e) => {
+      clearTimeout(tdTimer.current); tdTimer.current = null;
+      if (!tdRef.current.active) return;
+      const t = e.changedTouches[0];
+      tdExecute(t.clientX, t.clientY);
+      tdClear();
+    };
+    const onCancel = () => tdClear();
+    document.addEventListener('touchstart', onStart, { passive: true });
     document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('touchend', onEnd);
     document.addEventListener('touchcancel', onCancel);
     return () => {
+      document.removeEventListener('touchstart', onStart);
       document.removeEventListener('touchmove', onMove);
       document.removeEventListener('touchend', onEnd);
       document.removeEventListener('touchcancel', onCancel);
     };
-  }, [selectedBookId]); // bookRef 保证拿到最新 book
+  }, [selectedBookId]);
 
   // ==== 拖拽 ====
   const handleDragStart = (e, card) => {
@@ -652,9 +589,6 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
           onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); if (treeDragId && treeDragId !== card.id) handleTreeDragOver(e, card); }}
           onDragLeave={handleTreeDragLeave}
           onDrop={(e) => { e.stopPropagation(); handleTreeDrop(e, card); }}
-          onTouchStart={(e) => handleTreeTouchStart(e, card)}
-          onTouchEnd={handleTreeTouchEnd}
-          onTouchMove={handleTreeTouchMove}
           onDoubleClick={handleDoubleClick}
           onContextMenu={showMenu}
         >
