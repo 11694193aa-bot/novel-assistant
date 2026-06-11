@@ -569,24 +569,24 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
           {!isEditing && (
             <div className="tree-node-add" onClick={handleAddClick} title="添加子卡片">+</div>
           )}
+          <span className="tree-menu-handle"
+            onClick={(e) => { e.stopPropagation(); showMenu(e); }}
+            onTouchStart={(e) => { e.stopPropagation(); }}
+            onTouchMove={(e) => { e.stopPropagation(); }}
+            onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); showMenu(e); }}
+            title="菜单">⋯</span>
           {isEditing ? (
             <>
               <textarea className="tree-edit-content" defaultValue={card.content || ''} placeholder="输入内容..." autoFocus onKeyDown={handleEditKeyDown} onInput={handleTextareaInput} onBlur={saveEdit} ref={textareaInitRef} />
               <div className="tree-edit-hint">Ctrl+Enter 保存 · 点击外自动保存</div>
             </>
           ) : (
-            <div className="tree-content-row">
-              <span className="tree-menu-handle"
-                onClick={(e) => { e.stopPropagation(); showMenu(e); }}
-                onTouchStart={(e) => { e.stopPropagation(); }}
-                onTouchMove={(e) => { e.stopPropagation(); }}
-                onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); showMenu(e); }}
-                title="菜单">⋯</span>
+            <>
               {hasContent && <div className="tree-node-content" style={{whiteSpace:'pre-wrap'}}>{card.content}</div>}
               {!hasContent && (
                 <div className="tree-node-empty">双击编辑 · 悬停+建子节点</div>
               )}
-            </div>
+            </>
           )}
         </div>
         {hasKids && expanded && (
