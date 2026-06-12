@@ -25,6 +25,7 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     return () => document.body.classList.remove('mindmap-focus');
   }, [focusMode]);
   const [dragOverId, setDragOverId] = useState(null);
+  const [dragOverPos, setDragOverPos] = useState(null); // 'before'|'inside'|'after'
   const [draggedId, setDraggedId] = useState(null);
   const [selected, setSelected] = useState(new Set());
   const [bookBatchMode, setBookBatchMode] = useState(false);
@@ -355,19 +356,33 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     const cardEl = el?.closest('.mm-card');
     if (cardEl) {
       const cardId = cardEl.dataset?.cardId || cardEl.getAttribute('data-card-id');
-      if (cardId && cardId !== touchDragIdRef.current) setDragOverId(cardId);
-      else setDragOverId(null);
+      if (cardId && cardId !== touchDragIdRef.current) {
+        setDragOverId(cardId);
+        // [FIX] 25%/50%/25% 分区判定
+        const r = cardEl.getBoundingClientRect();
+        const ry = touch.clientY - r.top;
+        const band = r.height * 0.25;
+        const pos = ry < band ? 'before' : ry > r.height - band ? 'after' : 'inside';
+        setDragOverPos(pos);
+      } else {
+        setDragOverId(null); setDragOverPos(null);
+      }
     } else {
-      setDragOverId(null);
+      setDragOverId(null); setDragOverPos(null);
     }
   };
+  // [FIX] 三区判定：before/after→同级排序，inside→变子卡
   const handleTouchDragEnd = (e) => {
     clearTimeout(touchDragRef.current);
     const dragId = touchDragIdRef.current;
     if (dragId && dragOverId && dragOverId !== dragId) {
       const allCards = book?.mindMapCards || [];
       if (!isDescendantOf(allCards, dragId, dragOverId)) {
-        moveMindMapCard(selectedBookId, dragId, dragOverId);
+        if (dragOverPos === 'inside') {
+          moveMindMapCard(selectedBookId, dragId, dragOverId);
+        } else {
+          reorderMindMapCard(selectedBookId, dragId, dragOverId, dragOverPos === 'before');
+        }
       }
     }
     clearTouchDrag();
@@ -911,7 +926,7 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     return (
       <div key={card.id}>
         <div
-          className={`mm-card ${isParent ? 'mm-parent' : 'mm-child'} ${isDragOver ? 'mm-dragover' : ''} ${isDragging ? 'mm-dragging' : ''}`}
+          className={`mm-card ${isParent ? 'mm-parent' : 'mm-child'} ${isDragOver ? 'mm-dragover' : ''} ${isDragging ? 'mm-dragging' : ''}${dragOverPos === 'inside' ? ' drag-over-inside' : ''}${dragOverPos === 'before' ? ' drag-over-before' : ''}${dragOverPos === 'after' ? ' drag-over-after' : ''}`}
           style={{ marginLeft: isMobileView ? Math.min(depth, 1) * 16 : Math.min(depth, 2) * 26 }}
           draggable={!isMobileView}
           onDragStart={(e) => !isMobileView && handleDragStart(e, card)}
@@ -922,7 +937,7 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
               setDragOverId(card.id);
             }
           }}
-          onDragLeave={() => setDragOverId(null)}
+          onDragLeave={() => { setDragOverId(null); setDragOverPos(null); }}
           onDrop={(e) => handleDrop(e, card, depth)}
           data-card-id={card.id}
           // [FIX] 手机端：拖拽保留，菜单只由 ⋮⋮ 手柄触发
