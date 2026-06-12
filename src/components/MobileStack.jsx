@@ -349,18 +349,15 @@ export default function MobileStack({
         return (
           <div className="ms-page" key="books">
             <div className="ms-header">
-              <h1 className="ms-header-title"><CatIcon name="books" size={20} /> 我的书架</h1>
+              <CatIcon name="books" size={22} />
+              <h1 className="ms-header-title">我的书架</h1>
               <button className="ms-header-btn" onClick={() => { setBookBatchMode(!bookBatchMode); setSelectedBooks(new Set()); }}
-                style={{background:bookBatchMode?'var(--pink)':'var(--pink3)',color:bookBatchMode?'#fff':'var(--text)',fontWeight:800,fontSize:bookBatchMode?16:20}}>
+                style={{background:bookBatchMode?'var(--pink)':'var(--pink3)',color:bookBatchMode?'#fff':'var(--text)',fontSize:18}}>
                 {bookBatchMode ? '✕' : '☰'}
               </button>
               {!bookBatchMode && <>
-                <button className="ms-header-btn" onClick={() => onTabChange('settings')} title="设置" style={{fontSize:16}}>
-                  <CatIcon name="settings" size={18} />
-                </button>
-                <button className="ms-header-btn" onClick={handleAddBook} style={{fontSize:22}}>
-                  ＋
-                </button>
+                <button className="ms-header-btn" onClick={() => onTabChange('settings')} title="设置" style={{fontSize:16}}>⚙</button>
+                <button className="ms-header-btn" onClick={handleAddBook} style={{fontSize:22}}>＋</button>
               </>}
             </div>
 
