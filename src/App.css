@@ -2584,12 +2584,57 @@ button.focus-float-exit,
   font-size: 11px; color: var(--text3); flex-shrink: 0; font-weight: 600;
 }
 
+/* TTS 朗读控制 */
+.reader-tts-group {
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+.tts-btn {
+  width: 34px; height: 34px; border-radius: 14px;
+  background: var(--bg); cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  transition: .12s; flex-shrink: 0;
+}
+.tts-btn:hover { background: var(--hover); }
+.tts-btn.tts-active {
+  background: var(--pink3); color: var(--pink);
+  animation: ttsPulse 1.2s ease-in-out infinite;
+}
+@keyframes ttsPulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(196,122,90,.3); }
+  50% { box-shadow: 0 0 0 6px rgba(196,122,90,0); }
+}
+.tts-stop-btn {
+  font-size: 12px; font-weight: 700;
+}
+.tts-speed-select {
+  padding: 3px 6px; border-radius: 10px;
+  font-family: inherit; font-size: 11px; font-weight: 600;
+  background: var(--bg); color: var(--text2);
+  outline: none; cursor: pointer;
+  border: 1px solid var(--border) !important;
+}
+
 /* 正文区 */
 .reader-content {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   padding: 28px 24px; -webkit-overflow-scrolling: touch;
   -webkit-tap-highlight-color: transparent;
 }
+/* 清除浏览器默认蓝色选中背景，只显示字体 */
+.reader-content ::selection {
+  background: rgba(128,128,128,.12); color: inherit;
+}
+.reader-content ::-moz-selection {
+  background: rgba(128,128,128,.12); color: inherit;
+}
+
+/* 标注时的半透明遮罩 */
+.reader-overlay {
+  position: fixed; inset: 0; z-index: 250;
+  background: rgba(0,0,0,.08);
+  animation: fadeIn .2s ease;
+}
+.reader-masked .reader-topbar { opacity: .4; pointer-events: none; }
 
 .reader-text {
   max-width: 720px; margin: 0 auto;
@@ -2624,6 +2669,13 @@ button.focus-float-exit,
 .annotation-highlighter {
   background: linear-gradient(transparent 55%, color-mix(in srgb, var(--ann-color, #f39c12) 35%, transparent) 55%);
   padding: 0 1px;
+}
+
+/* TTS 当前朗读句子高亮 */
+.tts-highlight {
+  background: rgba(196,122,90,.15);
+  border-radius: 4px;
+  transition: background .3s;
 }
 
 /* 标注工具栏 */

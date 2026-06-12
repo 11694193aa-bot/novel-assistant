@@ -79,23 +79,53 @@ function getSelectionOffsets(containerEl) {
   return { start, end, text: sel.toString() };
 }
 
+// ─── 按句子拆分文字（用于 TTS 逐句高亮） ──────────────────────
+function splitSentences(text) {
+  // 按中文标点 + 换行拆分，保留标点在句尾
+  const parts = text.split(/(?<=[。！？；\n])|(?<=[，、])/g);
+  const sentences = [];
+  let buf = '';
+  for (const p of parts) {
+    buf += p;
+    if (/[。！？\n]$/.test(p) || buf.length > 80) {
+      sentences.push(buf);
+      buf = '';
+    }
+  }
+  if (buf.trim()) sentences.push(buf);
+  return sentences.filter(s => s.trim());
+}
+
 // ─── 组件 ─────────────────────────────────────────────────
 export default function ReaderView({ bookId, onBack, isMobile }) {
   const { readingBooks, addAnnotation, removeAnnotation, updateReadingProgress } = useStore();
   const book = readingBooks.find(b => b.id === bookId);
 
   const contentRef = useRef(null);
+  const ttsRef = useRef(null);        // SpeechSynthesisUtterance 实例
+  const sentIdxRef = useRef(0);       // 当前句子索引
+  const sentencesRef = useRef([]);    // 句子列表
+  const isSpeakingRef = useRef(false);
+
   const [showToolbar, setShowToolbar] = useState(false);
   const [toolbarPos, setToolbarPos] = useState({ x: 0, y: 0 });
   const [selectedColor, setSelectedColor] = useState(ANNOTATION_COLORS[0].value);
   const [selectedStyle, setSelectedStyle] = useState('wavy');
   const [pendingRange, setPendingRange] = useState(null);
   const [flashId, setFlashId] = useState(null);
+  const [ttsState, setTtsState] = useState('idle'); // idle | playing | paused
+  const [ttsSpeed, setTtsSpeed] = useState(1);
+  const [currentSentence, setCurrentSentence] = useState(-1);
   const progressRestored = useRef(false);
 
   useEffect(() => { progressRestored.current = false; }, [bookId]);
 
-  // —— 滚动时保存进度 ——
+  // 切换书籍时停止朗读
+  useEffect(() => {
+    return () => { window.speechSynthesis?.cancel(); setTtsState('idle'); };
+  }, [bookId]);
+
+  // ── 滚动时保存进度 ──
   const saveProgress = useCallback(() => {
     if (!contentRef.current || !book) return;
     const el = contentRef.current;
@@ -104,17 +134,15 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     updateReadingProgress(bookId, Math.max(book.readingProgress || 0, approxOffset));
   }, [book, bookId, updateReadingProgress]);
 
-  // —— 恢复阅读位置 ——
+  // ── 恢复阅读位置 ──
   const restoreReadingProgress = useCallback((el) => {
     if (!el || !book?.readingProgress || progressRestored.current) return;
     progressRestored.current = true;
     const ratio = Math.min(1, book.readingProgress / (book.content?.length || 1));
-    setTimeout(() => {
-      el.scrollTop = ratio * (el.scrollHeight - el.clientHeight);
-    }, 300);
+    setTimeout(() => { el.scrollTop = ratio * (el.scrollHeight - el.clientHeight); }, 300);
   }, [book?.readingProgress, book?.content]);
 
-  // —— selectionchange 驱动：检测用户选中文字 → 弹出工具栏 ——
+  // ── selectionchange 驱动工具栏 ──
   useEffect(() => {
     const onSelectionChange = () => {
       const offsets = getSelectionOffsets(contentRef.current);
@@ -130,7 +158,6 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         }
         setShowToolbar(true);
       } else {
-        // 没有有效选区 → 隐藏工具栏
         setShowToolbar(false);
         setPendingRange(null);
       }
@@ -139,7 +166,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     return () => document.removeEventListener('selectionchange', onSelectionChange);
   }, []);
 
-  // —— 桌面端 Esc 关闭 ——
+  // ── Esc 关闭 ──
   useEffect(() => {
     if (isMobile) return;
     const h = (e) => {
@@ -153,7 +180,96 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     return () => window.removeEventListener('keydown', h);
   }, [isMobile]);
 
-  // —— 确认添加标注 ——
+  // ── TTS：朗读功能 ──────────────────────────────────────
+  const scrollToSentence = useCallback((idx) => {
+    const el = contentRef.current;
+    if (!el) return;
+    const sentences = sentencesRef.current;
+    if (sentences.length === 0) return;
+    // 估算句子在全文中的位置比例
+    let charCount = 0;
+    for (let i = 0; i < idx; i++) charCount += sentences[i].length;
+    const totalChars = sentences.reduce((s, t) => s + t.length, 0);
+    const ratio = charCount / (totalChars || 1);
+    el.scrollTop = ratio * (el.scrollHeight - el.clientHeight);
+  }, []);
+
+  const speakSentence = useCallback((idx) => {
+    const sentences = sentencesRef.current;
+    if (idx >= sentences.length) {
+      window.speechSynthesis.cancel();
+      setTtsState('idle');
+      setCurrentSentence(-1);
+      isSpeakingRef.current = false;
+      return;
+    }
+    sentIdxRef.current = idx;
+    setCurrentSentence(idx);
+    scrollToSentence(idx);
+
+    const utter = new SpeechSynthesisUtterance(sentences[idx]);
+    utter.lang = 'zh-CN';
+    utter.rate = ttsSpeed;
+    utter.volume = 0.9;
+    // 尝试选中文语音
+    const voices = window.speechSynthesis.getVoices();
+    const zhVoice = voices.find(v => v.lang.startsWith('zh')) || voices[0];
+    if (zhVoice) utter.voice = zhVoice;
+
+    utter.onend = () => {
+      if (isSpeakingRef.current) speakSentence(idx + 1);
+    };
+    utter.onerror = () => {
+      if (isSpeakingRef.current) speakSentence(idx + 1);
+    };
+    ttsRef.current = utter;
+    window.speechSynthesis.speak(utter);
+  }, [ttsSpeed, scrollToSentence]);
+
+  const handleTTS = useCallback(() => {
+    const synth = window.speechSynthesis;
+    if (!synth) { alert('浏览器不支持语音朗读'); return; }
+
+    if (ttsState === 'playing') {
+      // 暂停
+      synth.pause();
+      setTtsState('paused');
+      isSpeakingRef.current = false;
+    } else if (ttsState === 'paused') {
+      // 继续
+      synth.resume();
+      setTtsState('playing');
+      isSpeakingRef.current = true;
+    } else {
+      // 开始朗读
+      if (!book?.content) return;
+      synth.cancel();
+      const sentences = splitSentences(book.content);
+      sentencesRef.current = sentences;
+      isSpeakingRef.current = true;
+      setTtsState('playing');
+      // 确保 voices 加载
+      if (synth.getVoices().length === 0) {
+        synth.addEventListener('voiceschanged', () => speakSentence(0), { once: true });
+      } else {
+        speakSentence(0);
+      }
+    }
+  }, [ttsState, book?.content, speakSentence]);
+
+  const handleTTSStop = useCallback(() => {
+    window.speechSynthesis.cancel();
+    setTtsState('idle');
+    setCurrentSentence(-1);
+    isSpeakingRef.current = false;
+  }, []);
+
+  // cleanup on unmount
+  useEffect(() => {
+    return () => { window.speechSynthesis?.cancel(); };
+  }, []);
+
+  // ── 确认标注 ──
   const handleConfirmAnnotation = () => {
     if (!pendingRange || !bookId) return;
     addAnnotation(bookId, {
@@ -170,14 +286,12 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     window.getSelection()?.removeAllRanges();
   };
 
-  // —— 取消标注 ——
   const handleCancelAnnotation = () => {
     setShowToolbar(false);
     setPendingRange(null);
     window.getSelection()?.removeAllRanges();
   };
 
-  // —— 点击已有标注 → 删除 ——
   const handleAnnotationClick = (annotationId, e) => {
     e.stopPropagation();
     e.preventDefault();
@@ -187,7 +301,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     }
   };
 
-  // —— 构建分段 ——
+  // ── 构建分段 ──
   const segments = useMemo(() => {
     if (!book) return [];
     return buildSegments(book.content, book.annotations || []);
@@ -204,13 +318,40 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   }
 
   return (
-    <div className={`reader-container${isMobile ? ' reader-mobile' : ''}`}>
+    <div className={`reader-container${isMobile ? ' reader-mobile' : ''}${showToolbar ? ' reader-masked' : ''}`}>
       {/* 极简顶栏 */}
       <div className="reader-topbar">
-        <button className="reader-back-btn" onClick={onBack}>
-          ‹ 书房
-        </button>
+        <button className="reader-back-btn" onClick={onBack}>‹ 书房</button>
         <span className="reader-title">{book.title}</span>
+
+        {/* TTS 控制区 */}
+        <div className="reader-tts-group">
+          {ttsState !== 'idle' && (
+            <>
+              <select
+                className="tts-speed-select"
+                value={ttsSpeed}
+                onChange={(e) => { setTtsSpeed(Number(e.target.value)); }}
+                title="朗读速度"
+              >
+                <option value={0.7}>0.7x</option>
+                <option value={0.85}>0.85x</option>
+                <option value={1}>1x</option>
+                <option value={1.25}>1.25x</option>
+                <option value={1.5}>1.5x</option>
+              </select>
+              <button className="tts-btn tts-stop-btn" onClick={handleTTSStop} title="停止">■</button>
+            </>
+          )}
+          <button
+            className={`tts-btn${ttsState === 'playing' ? ' tts-active' : ''}`}
+            onClick={handleTTS}
+            title={ttsState === 'playing' ? '暂停' : ttsState === 'paused' ? '继续' : 'AI 朗读'}
+          >
+            {ttsState === 'playing' ? '⏸' : ttsState === 'paused' ? '▶' : '🔊'}
+          </button>
+        </div>
+
         <span className="reader-progress">
           {book.annotations?.length > 0 && `${book.annotations.length}条笔记 · `}
           {book.totalChars >= 10000
@@ -219,18 +360,19 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         </span>
       </div>
 
-      {/* 正文区：始终允许文字选择，长按/拖动即选 */}
+      {/* 正文区 */}
       <div
         ref={(el) => { contentRef.current = el; restoreReadingProgress(el); }}
         className="reader-content"
         onScroll={saveProgress}
       >
         <div className="reader-text">
-          {segments.map((seg, i) =>
-            seg.annotation ? (
+          {segments.map((seg, i) => {
+            const isCurrentTTS = currentSentence >= 0 && seg.text === sentencesRef.current[currentSentence];
+            return seg.annotation ? (
               <span
                 key={i}
-                className={`annotation-mark annotation-${seg.annotation.lineStyle}`}
+                className={`annotation-mark annotation-${seg.annotation.lineStyle}${isCurrentTTS ? ' tts-highlight' : ''}`}
                 style={{ '--ann-color': seg.annotation.color }}
                 onClick={(e) => handleAnnotationClick(seg.annotation.id, e)}
                 title={`${LINE_STYLES.find(s => s.key === seg.annotation.lineStyle)?.label || ''} · 点击删除`}
@@ -238,24 +380,26 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
                 {seg.text}
               </span>
             ) : (
-              <span key={i}>{seg.text}</span>
-            )
-          )}
+              <span key={i} className={isCurrentTTS ? 'tts-highlight' : ''}>{seg.text}</span>
+            );
+          })}
         </div>
       </div>
 
-      {/* 标注工具栏：选中文字后自动浮出 */}
+      {/* 标注时的遮罩层 */}
+      {showToolbar && <div className="reader-overlay" onClick={handleCancelAnnotation} />}
+
+      {/* 标注工具栏 */}
       {showToolbar && (
         <div
           className="annotation-toolbar"
           style={{
             left: isMobile ? '50%' : toolbarPos.x,
             top: isMobile ? 'auto' : toolbarPos.y,
-            bottom: isMobile ? '80px' : 'auto',
+            bottom: isMobile ? '100px' : 'auto',
             transform: isMobile ? 'translateX(-50%)' : 'none',
           }}
         >
-          {/* 颜色选择 */}
           <div className="ann-colors">
             {ANNOTATION_COLORS.map(c => (
               <button
@@ -267,8 +411,6 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
               />
             ))}
           </div>
-
-          {/* 线型选择 */}
           <div className="ann-styles">
             {LINE_STYLES.map(s => (
               <button
@@ -282,15 +424,9 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
               </button>
             ))}
           </div>
-
-          {/* 确认/取消 */}
           <div className="ann-actions">
-            <button className="ann-confirm-btn" onClick={handleConfirmAnnotation}>
-              ✓ 标记
-            </button>
-            <button className="ann-cancel-btn" onClick={handleCancelAnnotation}>
-              ✕
-            </button>
+            <button className="ann-confirm-btn" onClick={handleConfirmAnnotation}>✓ 标记</button>
+            <button className="ann-cancel-btn" onClick={handleCancelAnnotation}>✕</button>
           </div>
         </div>
       )}
