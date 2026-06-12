@@ -116,11 +116,13 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [ttsState, setTtsState] = useState('idle'); // idle | playing | paused
   const [ttsSpeed, setTtsSpeed] = useState(1);
   const [ttsVoice, setTtsVoice] = useState(null);   // 选中的语音名
+  const ttsVoiceRef = useRef(null);                   // ref 版，保证 speakSentence 闭包里是最新值
   const [availableVoices, setAvailableVoices] = useState([]);
   const [currentSentence, setCurrentSentence] = useState(-1);
   const progressRestored = useRef(false);
 
   useEffect(() => { progressRestored.current = false; }, [bookId]);
+  useEffect(() => { ttsVoiceRef.current = ttsVoice; }, [ttsVoice]);
 
   // 切换书籍时停止朗读
   useEffect(() => {
@@ -243,9 +245,9 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     utter.lang = 'zh-CN';
     utter.rate = ttsSpeed;
     utter.volume = 0.9;
-    // 使用用户选择的语音
+    // 使用 ref 读取最新语音选择（避免闭包过期）
     const voices = window.speechSynthesis.getVoices();
-    const picked = voices.find(v => v.name === ttsVoice);
+    const picked = voices.find(v => v.name === ttsVoiceRef.current);
     const zhVoice = picked || voices.find(v => v.lang.startsWith('zh')) || voices[0];
     if (zhVoice) utter.voice = zhVoice;
 
