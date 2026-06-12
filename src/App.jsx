@@ -292,8 +292,7 @@ export default function App() {
 
         {/* 阅读全屏页 */}
         {activeTab === 'reading' && !readerBookId && (
-          <MobileFullPage title="阅读" onBack={() => navigateTab('directory')}
-            actions={<button className="tb-btn" onClick={() => document.querySelector('.rbl-import-btn')?.click()} style={{fontSize:13,fontWeight:700}}>📥 导入</button>}>
+          <MobileFullPage title="阅读" onBack={() => navigateTab('directory')}>
             <ReadingBookList isMobile onOpenReader={(id) => setReaderBookId(id)} />
           </MobileFullPage>
         )}
