@@ -18,6 +18,19 @@ export async function onRequest({ request, env }) {
       }
     }
 
+    // 保护：空数据不覆盖云端已有数据
+    if (!data.books?.length && !data.readingBooks?.length && !data.inspirationCards?.length) {
+      const existing = await env.SYNC.get('data');
+      if (existing) {
+        try {
+          const old = JSON.parse(existing);
+          if (old.books?.length || old.readingBooks?.length || old.inspirationCards?.length) {
+            return new Response(JSON.stringify({ ok: false, error: 'refused: empty overwrite' }), { status: 409, headers });
+          }
+        } catch(_) {}
+      }
+    }
+
     tasks.push(env.SYNC.put('data', JSON.stringify(data)));
     tasks.push(env.SYNC.put(`history_${ts}`, JSON.stringify(data)));
 
