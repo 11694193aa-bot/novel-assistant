@@ -529,18 +529,34 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         <div className="reader-text">
           {segments.map((seg, i) => {
             const isCurrentTTS = currentSentence >= 0 && seg.text === sentencesRef.current[currentSentence];
-            return seg.annotation ? (
+            if (!seg.annotation) {
+              return <span key={i} className={isCurrentTTS ? 'tts-highlight' : ''}>{seg.text}</span>;
+            }
+            const ann = seg.annotation;
+            const color = ann.color;
+            // 内联样式 — 不走 CSS 变量，确保标注一定显示
+            let annStyle = { cursor: 'pointer' };
+            if (ann.lineStyle === 'wavy') {
+              annStyle.textDecoration = `underline wavy ${color}`;
+              annStyle.textUnderlineOffset = '4px';
+              annStyle.textDecorationThickness = '2px';
+            } else if (ann.lineStyle === 'straight') {
+              annStyle.textDecoration = `underline ${color}`;
+              annStyle.textUnderlineOffset = '4px';
+              annStyle.textDecorationThickness = '2px';
+            } else if (ann.lineStyle === 'highlighter') {
+              annStyle.background = `linear-gradient(transparent 55%, ${color}40 55%)`;
+            }
+            return (
               <span
                 key={i}
-                className={`annotation-mark annotation-${seg.annotation.lineStyle}${isCurrentTTS ? ' tts-highlight' : ''}`}
-                style={{ '--ann-color': seg.annotation.color }}
-                onClick={(e) => handleAnnotationClick(seg.annotation.id, e)}
-                title={`${LINE_STYLES.find(s => s.key === seg.annotation.lineStyle)?.label || ''} · 点击删除`}
+                className={`annotation-mark${isCurrentTTS ? ' tts-highlight' : ''}`}
+                style={annStyle}
+                onClick={(e) => handleAnnotationClick(ann.id, e)}
+                title={`${LINE_STYLES.find(s => s.key === ann.lineStyle)?.label || ''} · 点击删除`}
               >
                 {seg.text}
               </span>
-            ) : (
-              <span key={i} className={isCurrentTTS ? 'tts-highlight' : ''}>{seg.text}</span>
             );
           })}
         </div>
