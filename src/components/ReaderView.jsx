@@ -278,7 +278,11 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       const dt = Math.min(now - last, 100); // 防止 tab 切后台后一跳到底
       last = now;
       const msPerChar = 80 / (ttsSpeedRef.current || 1);
-      const totalMs = (ttsChunksRef.current.reduce((s,t)=>s+t.length,0) || 1) * msPerChar;
+      // [FIX-4] 用剩余字数计算总时长，避免进度失真
+      const remainingChars = ttsChunksRef.current
+        .slice(ttsIdxRef.current)
+        .reduce((s,t) => s + t.length, 0);
+      const totalMs = (remainingChars || 1) * msPerChar;
       const pxPerMs = totalH / totalMs;
       el.scrollTop += pxPerMs * dt;
       scrollRAF.current = requestAnimationFrame(tick);
