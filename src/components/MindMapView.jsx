@@ -166,8 +166,8 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
   // 命中检测 → 设置视觉指示器
   const lastHit = useRef(null);
 
+  // 命中检测：25%/50%/25% 分区 → before / inside / after
   const tdHitTest = (cx, cy, dragId) => {
-    // 遍历所有树节点，用 getBoundingClientRect 数学判定——不依赖 elementFromPoint
     const allNodes = document.querySelectorAll('.tree-node:not(.tree-root-node)');
     let best = null;
     for (const node of allNodes) {
@@ -175,11 +175,10 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
       if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) {
         const tid = node.dataset.cardId;
         if (!tid || tid === dragId || isAncestorOf(dragId, tid)) continue;
-        // 选面积最小的（最内层/最具体的节点）
         const area = r.width * r.height;
         if (!best || area < best.area) {
           const ry = cy - r.top;
-          const band = Math.max(r.height * 0.2, 12);
+          const band = r.height * 0.25;
           const pos = ry < band ? 'before' : ry > r.height - band ? 'after' : 'inside';
           best = { tid, pos, area };
         }
@@ -190,7 +189,6 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
       lastHit.current = { tid: best.tid, pos: best.pos };
       return { tid: best.tid, pos: best.pos };
     }
-    // 兜底
     if (lastHit.current) {
       setTreeDropTarget({ id: lastHit.current.tid, pos: lastHit.current.pos });
       return lastHit.current;
