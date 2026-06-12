@@ -133,7 +133,9 @@
       "Bash(cat src/store/index.js)",
       "Bash(echo \"===== storage.js \\(loadData/saveData/flushCloudSync\\) =====\")",
       "Bash(cat src/utils/storage.js)",
-      "Bash(echo \"===== App.jsx auto-save timer =====\")"
+      "Bash(echo \"===== App.jsx auto-save timer =====\")",
+      "Bash(sed -n '261,273p' src/App.jsx)",
+      "Bash(sed -n '452,493p' src/store/index.js)"
     ],
     "additionalDirectories": [
       "C:\\Users\\11694\\AppData\\Local\\Temp",

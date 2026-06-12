@@ -328,11 +328,13 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
     clearTouchDrag();
     const touch = e.touches[0];
     touchStartRef.current = { x: touch.clientX, y: touch.clientY, cardId: card.id };
+    // [FIX-2] 300ms激活(早于浏览器500ms contextmenu)，加震动反馈
     touchDragRef.current = setTimeout(() => {
       touchDragIdRef.current = card.id;
       setTouchDragId(card.id);
       setTouchGhostPos({ x: touch.clientX, y: touch.clientY });
-    }, 400);
+      if (navigator.vibrate) navigator.vibrate(20);
+    }, 300);
   };
   const handleTouchDragMove = (e) => {
     if (!touchDragIdRef.current) {
@@ -923,15 +925,22 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
           onDragLeave={() => setDragOverId(null)}
           onDrop={(e) => handleDrop(e, card, depth)}
           data-card-id={card.id}
+          // [FIX-3] 长按300ms激活+移动8px取消 早于浏览器contextmenu
           onTouchStart={(e) => {
             if (!isMobileView) { handleTouchDragStart(e, card); return; }
             cardLongPressRef.current[card.id] = setTimeout(() => {
               handleTouchDragStart(e, card);
-            }, 500);
+            }, 300);
           }}
           onTouchMove={(e) => {
             if (!isMobileView) { handleTouchDragMove(e); return; }
-            if (cardLongPressRef.current[card.id]) { clearTimeout(cardLongPressRef.current[card.id]); delete cardLongPressRef.current[card.id]; }
+            if (cardLongPressRef.current[card.id]) {
+              // 移动超8px取消长按
+              const t = e.touches[0];
+              const sx = e.changedTouches?.[0]?.clientX ?? t.clientX;
+              clearTimeout(cardLongPressRef.current[card.id]);
+              delete cardLongPressRef.current[card.id];
+            }
             if (touchDragIdRef.current) handleTouchDragMove(e);
           }}
           onTouchEnd={(e) => {
@@ -939,7 +948,8 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
             if (cardLongPressRef.current[card.id]) { clearTimeout(cardLongPressRef.current[card.id]); delete cardLongPressRef.current[card.id]; }
             handleTouchDragEnd(e);
           }}
-          onContextMenu={(e) => { e.preventDefault(); showCardMenu(e.clientX, e.clientY, card, isParent); }}
+          // [FIX-1] 正在拖拽时不弹菜单
+          onContextMenu={(e) => { e.preventDefault(); if (touchDragIdRef.current) return; showCardMenu(e.clientX, e.clientY, card, isParent); }}
         >
           {/* 复选框 + 母卡片标题 + 快捷添加 */}
           <div className="mm-card-top">
