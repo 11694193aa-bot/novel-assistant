@@ -116,7 +116,15 @@
       "Bash(curl -s -o /tmp/tts_fast.mp3 -w \"HTTP:%{http_code} Size:%{size_download}\" -X POST \"https://41035773.novel-assistant-drf.pages.dev/api/tts\" -H \"Content-Type: application/json\" -d '{\"text\":\"快速朗读测试文本内容\",\"voice\":\"zh-CN\",\"rate\":1.5}' --connect-timeout 15)",
       "Bash(xxd -l 4 /tmp/tts_test.mp3)",
       "Bash(npx vite *)",
-      "Bash(echo \"第一章 春天的早晨。清晨阳光透过窗纱洒进房间。林小雨伸了个懒腰从床上坐起来。窗外几只麻雀在枝头叽叽喳喳地叫着。\")"
+      "Bash(echo \"第一章 春天的早晨。清晨阳光透过窗纱洒进房间。林小雨伸了个懒腰从床上坐起来。窗外几只麻雀在枝头叽叽喳喳地叫着。\")",
+      "Bash(cat src/components/ReaderView.jsx)",
+      "Bash(echo -e \"\\\\n\\\\n===== ReadingBookList.jsx =====\\\\n\")",
+      "Bash(cat src/components/ReadingBookList.jsx)",
+      "Bash(echo -e \"\\\\n\\\\n===== importBook.js =====\\\\n\")",
+      "Bash(cat src/utils/importBook.js)",
+      "Bash(echo \"\")",
+      "Bash(echo \"===== ReadingBookList.jsx =====\")",
+      "Bash(echo \"===== importBook.js =====\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\11694\\AppData\\Local\\Temp",

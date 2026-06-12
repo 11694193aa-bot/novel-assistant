@@ -98,7 +98,7 @@ function splitSentences(text) {
 
 // ─── 组件 ─────────────────────────────────────────────────
 export default function ReaderView({ bookId, onBack, isMobile }) {
-  const { readingBooks, addAnnotation, removeAnnotation, updateReadingProgress } = useStore();
+  const { readingBooks, addAnnotation, removeAnnotation, updateReadingProgress, persist } = useStore();
   const book = readingBooks.find(b => b.id === bookId);
 
   const contentRef = useRef(null);
@@ -452,8 +452,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       selectedText: pendingRange.text,
       note: '',
     });
-    // 立即持久化
-    const { persist } = useStore.getState();
+    // [FIX-1] 直接使用组件顶层解构的 persist，不再跨组件调用 getState
     persist(true);
     setFlashId(Date.now());
     setShowToolbar(false);
