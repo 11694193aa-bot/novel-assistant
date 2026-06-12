@@ -925,10 +925,10 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
           onDragLeave={() => setDragOverId(null)}
           onDrop={(e) => handleDrop(e, card, depth)}
           data-card-id={card.id}
-          // [FIX] 手机端：触摸直接走拖拽，菜单由 ⋮⋮ 手柄单独触发
-          onTouchStart={(e) => { if (!isMobileView) handleTouchDragStart(e, card); }}
-          onTouchMove={(e) => { if (!isMobileView) handleTouchDragMove(e); }}
-          onTouchEnd={(e) => { if (!isMobileView) handleTouchDragEnd(e); }}
+          // [FIX] 手机端：拖拽保留，菜单只由 ⋮⋮ 手柄触发
+          onTouchStart={(e) => { handleTouchDragStart(e, card); }}
+          onTouchMove={(e) => { handleTouchDragMove(e); }}
+          onTouchEnd={(e) => { handleTouchDragEnd(e); }}
           // [FIX] 手机端完全禁用右键菜单，只由 ⋮⋮ 手柄触发
           onContextMenu={(e) => { e.preventDefault(); if (isMobileView) return; showCardMenu(e.clientX, e.clientY, card, isParent); }}
         >
