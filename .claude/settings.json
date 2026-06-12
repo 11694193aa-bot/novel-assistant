@@ -109,7 +109,12 @@
       "Bash(git tag *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=6A5AA1D9EA6538DDA18DC0DD3A9C5A6C\" -X POST -H \"Content-Type: application/ssml+xml\" -H \"User-Agent: Mozilla/5.0\" -H \"X-Microsoft-OutputFormat: audio-24khz-48kbitrate-mono-mp3\" --data \"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='zh-CN'><voice name='zh-CN-XiaoxiaoNeural'>测试</voice></speak>\" --connect-timeout 8)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=6A5AA1D9EA6538DDA18DC0DD3A9C5A6C\" -X POST -H \"Content-Type: application/ssml+xml\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0\" -H \"Origin: https://www.bing.com\" -H \"X-Microsoft-OutputFormat: audio-24khz-48kbitrate-mono-mp3\" -d @-)",
-      "Bash(curl -s -o /tmp/tts_test.mp3 -w \"HTTP %{http_code}, Size %{size_download}\" \"https://translate.google.com/translate_tts?ie=UTF-8&q=你好世界测试语音&tl=zh-CN&client=tw-ob&ttsspeed=1\" -H \"User-Agent: Mozilla/5.0\" --connect-timeout 8)"
+      "Bash(curl -s -o /tmp/tts_test.mp3 -w \"HTTP %{http_code}, Size %{size_download}\" \"https://translate.google.com/translate_tts?ie=UTF-8&q=你好世界测试语音&tl=zh-CN&client=tw-ob&ttsspeed=1\" -H \"User-Agent: Mozilla/5.0\" --connect-timeout 8)",
+      "Bash(curl -s -o /tmp/tts_test.mp3 -w \"HTTP:%{http_code} Size:%{size_download} Type:%{content_type}\" -X POST \"https://41035773.novel-assistant-drf.pages.dev/api/tts\" -H \"Content-Type: application/json\" -d '{\"text\":\"你好世界这是一条测试语音\",\"voice\":\"zh-CN\",\"rate\":1}' --connect-timeout 15)",
+      "Bash(curl -s -o /dev/null -w \"HTTP:%{http_code} Size:%{size_download}\" \"https://41035773.novel-assistant-drf.pages.dev/\" --connect-timeout 10)",
+      "Bash(curl -s -o /tmp/tts_long.mp3 -w \"HTTP:%{http_code} Size:%{size_download}\" -X POST \"https://41035773.novel-assistant-drf.pages.dev/api/tts\" -H \"Content-Type: application/json\" -d '{\"text\":\"春天来了，万物复苏，大地一片生机勃勃的景象。柳树抽出了嫩绿的新芽，桃花绽放出粉红的笑脸。小燕子从南方飞回来了，在蓝天上自由自在地飞翔。\",\"voice\":\"zh-CN\",\"rate\":1}' --connect-timeout 15)",
+      "Bash(curl -s -o /tmp/tts_fast.mp3 -w \"HTTP:%{http_code} Size:%{size_download}\" -X POST \"https://41035773.novel-assistant-drf.pages.dev/api/tts\" -H \"Content-Type: application/json\" -d '{\"text\":\"快速朗读测试文本内容\",\"voice\":\"zh-CN\",\"rate\":1.5}' --connect-timeout 15)",
+      "Bash(xxd -l 4 /tmp/tts_test.mp3)"
     ],
     "additionalDirectories": [
       "C:\\Users\\11694\\AppData\\Local\\Temp",

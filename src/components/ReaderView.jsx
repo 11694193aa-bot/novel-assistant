@@ -272,13 +272,13 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     utter.lang = 'zh-CN';
     utter.rate = ttsSpeed;
     utter.volume = 1.0;
-    const voices = window.speechSynthesis.getVoices();
-    const picked = voices.find(v => v.name === ttsVoiceRef.current);
+    // 用缓存的语音列表，不用 getVoices()——Chrome 有时返回空数组导致回退默认语音
+    const picked = sysVoices.find(v => v.name === ttsVoiceRef.current) || sysVoices[0];
     if (picked) utter.voice = picked;
     utter.onend = () => { if (isSpeakingRef.current) playChunk(idx + 1); };
     utter.onerror = () => { if (isSpeakingRef.current) playChunk(idx + 1); };
     window.speechSynthesis.speak(utter);
-  }, [ttsSpeed, stopTTS]);
+  }, [ttsSpeed, stopTTS, sysVoices]);
 
   const startTTS = useCallback((fromIdx = 0) => {
     if (!book?.content) return;
@@ -311,8 +311,21 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const handleVoiceChange = useCallback((name) => {
     setTtsVoice(name);
     ttsVoiceRef.current = name;
-    // 不打断当前句，下一句自动用新语音 — 避免 cancel 竞态
+    // 不打断当前句，下一句自动用新语音
   }, []);
+
+  // 倍速即时生效：打断当前句，从同一位置用新速度继续
+  const handleSpeedChange = useCallback((newSpeed) => {
+    setTtsSpeed(newSpeed);
+    if (!isSpeakingRef.current) return;
+    const cur = ttsIdxRef.current;
+    window.speechSynthesis?.cancel();
+    // cancel 后重新从当前块播放（用新速度）
+    setTimeout(() => {
+      if (!isSpeakingRef.current) return;
+      playChunk(cur);
+    }, 50);
+  }, [playChunk]);
 
   useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
@@ -396,7 +409,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
               <select
                 className="tts-speed-select"
                 value={ttsSpeed}
-                onChange={(e) => { setTtsSpeed(Number(e.target.value)); }}
+                onChange={(e) => { handleSpeedChange(Number(e.target.value)); }}
                 title="朗读速度"
               >
                 <option value={0.7}>0.7x</option>
