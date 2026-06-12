@@ -119,6 +119,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   useEffect(() => { ttsSpeedRef.current = ttsSpeed; }, [ttsSpeed]);
   const [ttsVoice, setTtsVoice] = useState(null);
   const ttsVoiceRef = useRef(null);
+  // [FIX-2] 标记用户是否手动选过语音，防止 voiceschanged 重置
+  const userHasSelectedVoiceRef = useRef(false);
   const [sysVoices, setSysVoices] = useState([]);
   const sysVoicesRef = useRef([]);
   const [currentSentence, setCurrentSentence] = useState(-1);
@@ -238,10 +240,11 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     const load = () => {
       const all = window.speechSynthesis.getVoices();
       const zh = all.filter(v => v.lang.startsWith('zh'));
+      // [FIX-2] 仅首次且用户从未手动选择时才设默认语音
       if (zh.length > 0) {
         setSysVoices(zh);
         sysVoicesRef.current = zh;
-        if (!ttsVoiceRef.current) {
+        if (!ttsVoiceRef.current && !userHasSelectedVoiceRef.current) {
           const yun = zh.find(v => /yunyang|云扬/i.test(v.name)) || zh[0];
           setTtsVoice(yun.name);
           ttsVoiceRef.current = yun.name;
@@ -389,8 +392,11 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
   const handleTTSStop = useCallback(() => stopTTS(), [stopTTS]);
 
+  // [FIX-2] 标记用户已手动选语音，防止 voiceschanged 重置
   const handleVoiceChange = useCallback((name) => {
-    setTtsVoice(name); ttsVoiceRef.current = name;
+    setTtsVoice(name);
+    ttsVoiceRef.current = name;
+    userHasSelectedVoiceRef.current = true;
   }, []);
 
   const handleSpeedChange = useCallback((newSpeed) => {
@@ -519,17 +525,22 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
             const curChunk = currentChunkText;
             const isPlaying = ttsState === 'playing' && curChunk;
             // 把大段按句号拆成小句，逐个检查是否在当前 chunk 里
+            // [FIX-1] 精确匹配当前朗读句：小句必须等于或以 curChunk 开头/结尾
             const splitBySentence = (text) => {
               if (!isPlaying) return [{ text, match: false }];
-              if (text.length < curChunk.length && curChunk.includes(text.trim())) {
+              const c = curChunk.trim();
+              // 小段：要求 curChunk 包含 text 且 text 长度 > 4，避免通用短片段误触发
+              if (text.length < c.length && c.includes(text.trim())) {
                 const t = text.trim();
-                return [{ text, match: t.length > 0 && /[一-鿿]/.test(t) }];
+                const match = t.length > 4 && /[一-鿿]/.test(t);
+                return [{ text, match }];
               }
-              // 大段 → 拆句
+              // 大段 → 拆句，每句必须和 curChunk 高度相似
               const parts = text.split(/(?<=[。！？\n])/g);
               return parts.map(p => {
                 const t = p.trim();
-                const match = t.length > 0 && /[一-鿿]/.test(t) && curChunk.includes(t);
+                const match = t.length > 0 && /[一-鿿]/.test(t) &&
+                  (t === c || c.startsWith(t) || c.endsWith(t));
                 return { text: p, match };
               });
             };
