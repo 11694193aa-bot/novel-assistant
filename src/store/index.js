@@ -595,7 +595,7 @@ const useStore = create((set, get) => ({
       readingBooks: s.readingBooks.map(b => b.id === bookId
         ? { ...b, readingProgress: offset }
         : b),
-      dirty: true,
+      // 不设 dirty，阅读进度不需要触发自动保存
     }));
   },
 }));

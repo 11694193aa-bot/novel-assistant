@@ -145,13 +145,18 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
   }, []);
 
-  // ── 滚动时保存进度 ──
+  // ── 滚动时保存进度（节流 2 秒）──
+  const scrollTimerRef = useRef(null);
   const saveProgress = useCallback(() => {
-    if (!contentRef.current || !book) return;
-    const el = contentRef.current;
-    const scrollRatio = el.scrollTop / (el.scrollHeight - el.clientHeight || 1);
-    const approxOffset = Math.floor(scrollRatio * (book.content || '').length);
-    updateReadingProgress(bookId, Math.max(book.readingProgress || 0, approxOffset));
+    if (scrollTimerRef.current) return;
+    scrollTimerRef.current = setTimeout(() => {
+      scrollTimerRef.current = null;
+      if (!contentRef.current || !book) return;
+      const el = contentRef.current;
+      const scrollRatio = el.scrollTop / (el.scrollHeight - el.clientHeight || 1);
+      const approxOffset = Math.floor(scrollRatio * (book.content || '').length);
+      updateReadingProgress(bookId, Math.max(book.readingProgress || 0, approxOffset));
+    }, 2000);
   }, [book, bookId, updateReadingProgress]);
 
   // ── 恢复阅读位置 ──
@@ -214,83 +219,100 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     return () => window.removeEventListener('keydown', h);
   }, [isMobile]);
 
-  // ── TTS：朗读功能 ──────────────────────────────────────
-  const scrollToSentence = useCallback((idx) => {
-    const el = contentRef.current;
-    if (!el) return;
-    const sentences = sentencesRef.current;
-    if (sentences.length === 0) return;
-    // 估算句子在全文中的位置比例
-    let charCount = 0;
-    for (let i = 0; i < idx; i++) charCount += sentences[i].length;
-    const totalChars = sentences.reduce((s, t) => s + t.length, 0);
-    const ratio = charCount / (totalChars || 1);
-    el.scrollTop = ratio * (el.scrollHeight - el.clientHeight);
+  // ── TTS：朗读功能（分块预加载，消除句间间隙）───────────
+  const ttsChunkIdxRef = useRef(0);
+  const ttsChunksRef = useRef([]);
+
+  // 把文本按 ~200 字分块
+  const buildChunks = useCallback((text) => {
+    const raw = splitSentences(text);
+    const chunks = [];
+    let buf = '';
+    for (const s of raw) {
+      buf += s;
+      if (buf.length >= 200) { chunks.push(buf); buf = ''; }
+    }
+    if (buf.trim()) chunks.push(buf);
+    return chunks;
   }, []);
 
-  const speakSentence = useCallback((idx) => {
-    const sentences = sentencesRef.current;
-    if (idx >= sentences.length) {
-      window.speechSynthesis.cancel();
-      setTtsState('idle');
-      setCurrentSentence(-1);
-      isSpeakingRef.current = false;
-      return;
+  const queueChunks = useCallback((fromIdx) => {
+    const chunks = ttsChunksRef.current;
+    const synth = window.speechSynthesis;
+    // 一次队列最多放 3 块，避免溢出
+    const end = Math.min(fromIdx + 3, chunks.length);
+    for (let i = fromIdx; i < end; i++) {
+      const utter = new SpeechSynthesisUtterance(chunks[i]);
+      utter.lang = 'zh-CN';
+      utter.rate = ttsSpeed;
+      utter.volume = 0.9;
+      const voices = synth.getVoices();
+      const picked = voices.find(v => v.name === ttsVoiceRef.current);
+      const zhVoice = picked || voices.find(v => v.lang.startsWith('zh')) || voices[0];
+      if (zhVoice) utter.voice = zhVoice;
+
+      utter.onstart = () => {
+        ttsChunkIdxRef.current = i;
+        setCurrentSentence(i);
+        // 滚动跟随
+        let cc = 0;
+        for (let j = 0; j < i; j++) cc += chunks[j].length;
+        const total = chunks.reduce((s, t) => s + t.length, 0);
+        const el = contentRef.current;
+        if (el) el.scrollTop = (cc / (total || 1)) * (el.scrollHeight - el.clientHeight);
+      };
+
+      utter.onend = () => {
+        const next = ttsChunkIdxRef.current + 1;
+        if (next >= chunks.length) {
+          if (isSpeakingRef.current) {
+            setTtsState('idle');
+            setCurrentSentence(-1);
+            isSpeakingRef.current = false;
+          }
+          return;
+        }
+        // 队列快空了就补
+        const remaining = chunks.length - next;
+        if (remaining <= 2 && isSpeakingRef.current) {
+          queueChunks(next);
+        }
+      };
+
+      utter.onerror = () => {
+        // 忽略，onend 会处理
+      };
+      synth.speak(utter);
     }
-    sentIdxRef.current = idx;
-    setCurrentSentence(idx);
-    scrollToSentence(idx);
-
-    const utter = new SpeechSynthesisUtterance(sentences[idx]);
-    utter.lang = 'zh-CN';
-    utter.rate = ttsSpeed;
-    utter.volume = 0.9;
-    // 使用 ref 读取最新语音选择（避免闭包过期）
-    const voices = window.speechSynthesis.getVoices();
-    const picked = voices.find(v => v.name === ttsVoiceRef.current);
-    const zhVoice = picked || voices.find(v => v.lang.startsWith('zh')) || voices[0];
-    if (zhVoice) utter.voice = zhVoice;
-
-    utter.onend = () => {
-      if (isSpeakingRef.current) speakSentence(idx + 1);
-    };
-    utter.onerror = () => {
-      if (isSpeakingRef.current) speakSentence(idx + 1);
-    };
-    ttsRef.current = utter;
-    window.speechSynthesis.speak(utter);
-  }, [ttsSpeed, scrollToSentence]);
+  }, [ttsSpeed]);
 
   const handleTTS = useCallback(() => {
     const synth = window.speechSynthesis;
     if (!synth) { alert('浏览器不支持语音朗读'); return; }
 
     if (ttsState === 'playing') {
-      // 暂停
       synth.pause();
       setTtsState('paused');
       isSpeakingRef.current = false;
     } else if (ttsState === 'paused') {
-      // 继续
       synth.resume();
       setTtsState('playing');
       isSpeakingRef.current = true;
     } else {
-      // 开始朗读
       if (!book?.content) return;
       synth.cancel();
-      const sentences = splitSentences(book.content);
-      sentencesRef.current = sentences;
+      const chunks = buildChunks(book.content);
+      ttsChunksRef.current = chunks;
+      ttsChunkIdxRef.current = 0;
       isSpeakingRef.current = true;
       setTtsState('playing');
-      // 确保 voices 加载
       if (synth.getVoices().length === 0) {
-        synth.addEventListener('voiceschanged', () => speakSentence(0), { once: true });
+        synth.addEventListener('voiceschanged', () => queueChunks(0), { once: true });
       } else {
-        speakSentence(0);
+        queueChunks(0);
       }
     }
-  }, [ttsState, book?.content, speakSentence]);
+  }, [ttsState, book?.content, buildChunks, queueChunks]);
 
   const handleTTSStop = useCallback(() => {
     window.speechSynthesis.cancel();
