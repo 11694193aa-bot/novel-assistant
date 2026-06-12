@@ -213,98 +213,129 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     return () => window.removeEventListener('keydown', h);
   }, [isMobile]);
 
-  // ── TTS：云端 Google TTS（fetch Audio，不依赖手机 TTS 引擎）──
+  // ── TTS 引擎：桌面用系统语音 / 手机用云端 ──────────────
   const ttsAudioRef = useRef(null);
   const ttsAbortRef = useRef(null);
+
+  // ── 桌面端：加载系统语音 ──
+  useEffect(() => {
+    if (isMobile) return;
+    const load = () => {
+      const all = window.speechSynthesis.getVoices();
+      const zh = all.filter(v => v.lang.startsWith('zh'));
+      if (zh.length > 0) {
+        setSysVoices(zh);
+        sysVoicesRef.current = zh;
+        if (!ttsVoiceRef.current) {
+          setTtsVoice(zh[0].name);
+          ttsVoiceRef.current = zh[0].name;
+        }
+      }
+    };
+    load();
+    window.speechSynthesis.addEventListener('voiceschanged', load);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
+  }, [isMobile]);
 
   const stopTTS = useCallback(() => {
     ttsAbortRef.current?.abort();
     ttsAudioRef.current?.pause();
     ttsAudioRef.current = null;
+    window.speechSynthesis?.cancel();
     isSpeakingRef.current = false;
     setTtsState('idle');
     setCurrentSentence(-1);
   }, []);
 
-  const playChunk = useCallback(async (idx) => {
+  // ── 桌面端：SpeechSynthesis 逐块播放 ──
+  const speakLocal = useCallback((idx) => {
     const chunks = ttsChunksRef.current;
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx;
     setCurrentSentence(idx);
-
     let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
-    const total = chunks.reduce((s, t) => s + t.length, 0);
     const el = contentRef.current;
-    if (el) el.scrollTop = (cc / (total || 1)) * (el.scrollHeight - el.clientHeight);
+    if (el) el.scrollTop = (cc / (chunks.reduce((s,t)=>s+t.length,0)||1)) * (el.scrollHeight - el.clientHeight);
 
-    const abort = new AbortController();
-    ttsAbortRef.current = abort;
+    const u = new SpeechSynthesisUtterance(chunks[idx]);
+    u.lang = 'zh-CN'; u.rate = ttsSpeed; u.volume = 1;
+    const v = sysVoicesRef.current.find(v => v.name === ttsVoiceRef.current) || sysVoicesRef.current[0];
+    if (v) u.voice = v;
+    u.onend = () => { if (isSpeakingRef.current) speakLocal(idx + 1); };
+    u.onerror = () => { if (isSpeakingRef.current) speakLocal(idx + 1); };
+    window.speechSynthesis.speak(u);
+  }, [ttsSpeed, stopTTS]);
+
+  // ── 手机端：云端 TTS fetch Audio ──
+  const playCloud = useCallback(async (idx) => {
+    const chunks = ttsChunksRef.current;
+    if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
+    ttsIdxRef.current = idx; setCurrentSentence(idx);
+    let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
+    const el = contentRef.current;
+    if (el) el.scrollTop = (cc / (chunks.reduce((s,t)=>s+t.length,0)||1)) * (el.scrollHeight - el.clientHeight);
+
+    const abort = new AbortController(); ttsAbortRef.current = abort;
     try {
-      const res = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: chunks[idx], rate: ttsSpeed }),
-        signal: abort.signal,
-      });
-      if (!res.ok) throw new Error('TTS fail');
+      const res = await fetch('/api/tts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:chunks[idx],rate:ttsSpeed}), signal:abort.signal });
+      if (!res.ok) throw new Error('fail');
       const blob = await res.blob();
       if (!isSpeakingRef.current || abort.signal.aborted) return;
       const url = URL.createObjectURL(blob);
       const a = new Audio(url);
-      a.onended = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playChunk(idx + 1); };
-      a.onerror = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playChunk(idx + 1); };
+      a.onended = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playCloud(idx + 1); };
+      a.onerror = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playCloud(idx + 1); };
       ttsAudioRef.current = a;
-      a.play().catch(() => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playChunk(idx + 1); });
+      a.play().catch(() => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playCloud(idx + 1); });
     } catch (e) {
       if (abort.signal.aborted) return;
-      // 网络失败等 500ms 重试
-      if (isSpeakingRef.current) {
-        await new Promise(r => setTimeout(r, 500));
-        if (isSpeakingRef.current) playChunk(idx);
-      }
+      if (isSpeakingRef.current) { await new Promise(r=>setTimeout(r,500)); if (isSpeakingRef.current) playCloud(idx); }
     }
   }, [ttsSpeed, stopTTS]);
+
+  const playChunk = isMobile ? playCloud : speakLocal;
 
   const startTTS = useCallback((fromIdx = 0) => {
     if (!book?.content) return;
     stopTTS();
-    const chunks = [];
-    const raw = splitSentences(book.content);
+    const chunks = [], raw = splitSentences(book.content);
     let buf = '';
-    for (const s of raw) { buf += s; if (buf.length >= 180) { chunks.push(buf); buf = ''; } }
+    const limit = isMobile ? 180 : 300;
+    for (const s of raw) { buf += s; if (buf.length >= limit) { chunks.push(buf); buf = ''; } }
     if (buf.trim()) chunks.push(buf);
     ttsChunksRef.current = chunks;
     isSpeakingRef.current = true;
     setTtsState('playing');
     playChunk(Math.min(fromIdx, chunks.length - 1));
-  }, [book?.content, stopTTS, playChunk]);
+  }, [book?.content, stopTTS, playChunk, isMobile]);
 
   const handleTTS = useCallback(() => {
     if (ttsState === 'playing') {
-      ttsAbortRef.current?.abort();
-      ttsAudioRef.current?.pause();
-      setTtsState('paused');
-      isSpeakingRef.current = false;
+      if (isMobile) { ttsAbortRef.current?.abort(); ttsAudioRef.current?.pause(); }
+      else window.speechSynthesis?.pause();
+      setTtsState('paused'); isSpeakingRef.current = false;
     } else if (ttsState === 'paused') {
-      isSpeakingRef.current = true;
-      setTtsState('playing');
-      ttsAudioRef.current?.play().catch(() => {});
-    } else {
-      startTTS(0);
-    }
-  }, [ttsState, startTTS]);
+      isSpeakingRef.current = true; setTtsState('playing');
+      if (isMobile) ttsAudioRef.current?.play().catch(()=>{});
+      else window.speechSynthesis?.resume();
+    } else startTTS(0);
+  }, [ttsState, startTTS, isMobile]);
 
   const handleTTSStop = useCallback(() => stopTTS(), [stopTTS]);
+
+  const handleVoiceChange = useCallback((name) => {
+    setTtsVoice(name); ttsVoiceRef.current = name;
+  }, []);
 
   const handleSpeedChange = useCallback((newSpeed) => {
     setTtsSpeed(newSpeed);
     if (!isSpeakingRef.current) return;
     const cur = ttsIdxRef.current;
-    stopTTS();
-    setTimeout(() => { if (isSpeakingRef.current) startTTS(cur); }, 100);
-  }, [stopTTS, startTTS]);
+    if (isMobile) { stopTTS(); setTimeout(() => startTTS(cur), 100); }
+    else { window.speechSynthesis?.cancel(); setTimeout(() => { if (isSpeakingRef.current) speakLocal(cur); }, 50); }
+  }, [isMobile, stopTTS, startTTS, speakLocal]);
 
-  useEffect(() => () => stopTTS(), [stopTTS]);
+  useEffect(() => () => { window.speechSynthesis?.cancel(); ttsAbortRef.current?.abort(); }, []);
 
   // ── 确认标注 ──
   const handleConfirmAnnotation = () => {
@@ -366,6 +397,14 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
         {/* TTS 控制区 */}
         <div className="reader-tts-group">
+          {/* 桌面端语音选择器 */}
+          {!isMobile && sysVoices.length > 0 && (
+            <select className="tts-voice-select" value={ttsVoice || ''} onChange={(e) => handleVoiceChange(e.target.value)} title="选择语音">
+              {sysVoices.map(v => (
+                <option key={v.name} value={v.name}>{v.name.replace(/Microsoft\s*/i,'').replace(/\(.*\)/,'').trim()}</option>
+              ))}
+            </select>
+          )}
           {ttsState !== 'idle' && (
             <>
               <select
