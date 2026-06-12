@@ -122,8 +122,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [sysVoices, setSysVoices] = useState([]);
   const sysVoicesRef = useRef([]);
   const [currentSentence, setCurrentSentence] = useState(-1);
-  const currentChunkStartRef = useRef(0);
-  const currentChunkEndRef = useRef(0);
+  const [highlightRange, setHighlightRange] = useState({ start: 0, end: 0 });
   const progressRestored = useRef(false);
 
   useEffect(() => { progressRestored.current = false; }, [bookId]);
@@ -294,10 +293,15 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx;
     setCurrentSentence(idx);
-    // 记录当前块的字符范围（用于标亮）
+    // 标亮当前块
     let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
-    currentChunkStartRef.current = cc;
-    currentChunkEndRef.current = cc + chunks[idx].length;
+    setHighlightRange({ start: cc, end: cc + chunks[idx].length });
+    // 平滑滚动
+    const el = contentRef.current;
+    if (el) {
+      const total = chunks.reduce((s,t)=>s+t.length,0)||1;
+      el.scrollTo({ top: (cc / total) * (el.scrollHeight - el.clientHeight), behavior: 'smooth' });
+    }
 
     const curGen = ttsGenRef.current;
     const u = new SpeechSynthesisUtterance(chunks[idx]);
@@ -316,8 +320,12 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx; setCurrentSentence(idx);
     let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
-    currentChunkStartRef.current = cc;
-    currentChunkEndRef.current = cc + chunks[idx].length;
+    setHighlightRange({ start: cc, end: cc + chunks[idx].length });
+    const el = contentRef.current;
+    if (el) {
+      const total = chunks.reduce((s,t)=>s+t.length,0)||1;
+      el.scrollTo({ top: (cc / total) * (el.scrollHeight - el.clientHeight), behavior: 'smooth' });
+    }
 
     const abort = new AbortController(); ttsAbortRef.current = abort;
     const curGen = ttsGenRef.current;
@@ -349,25 +357,22 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     ttsChunksRef.current = chunks;
     isSpeakingRef.current = true;
     setTtsState('playing');
-    startAutoScroll();
     const gen = ttsGenRef.current;
     const fn = isMobile ? playCloud : speakLocal;
     fn(Math.min(fromIdx, chunks.length - 1), gen);
-  }, [book?.content, stopTTS, isMobile, speakLocal, playCloud, startAutoScroll]);
+  }, [book?.content, stopTTS, isMobile, speakLocal, playCloud]);
 
   const handleTTS = useCallback(() => {
     if (ttsState === 'playing') {
-      stopAutoScroll();
       if (isMobile) { ttsAbortRef.current?.abort(); ttsAudioRef.current?.pause(); }
       else { isSpeakingRef.current = false; window.speechSynthesis?.pause(); }
       setTtsState('paused');
     } else if (ttsState === 'paused') {
       isSpeakingRef.current = true; setTtsState('playing');
-      startAutoScroll();
       if (isMobile) ttsAudioRef.current?.play().catch(()=>{});
       else window.speechSynthesis?.resume();
     } else startTTS(0);
-  }, [ttsState, startTTS, isMobile, stopAutoScroll, startAutoScroll]);
+  }, [ttsState, startTTS, isMobile]);
 
   const handleTTSStop = useCallback(() => stopTTS(), [stopTTS]);
 
@@ -500,10 +505,9 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
               const segStart = charPos;
               const segEnd = charPos + seg.text.length;
               charPos = segEnd;
-              // 用字符偏移判断是否在当前朗读块内
-              const cs = currentChunkStartRef.current;
-              const ce = currentChunkEndRef.current;
-              const isCurrentTTS = ttsState === 'playing' && segEnd > cs && segStart < ce;
+              // 用字符偏移判断是否在当前朗读块内（highlightRange 是 state，变化时触发重渲染）
+              const { start: cs, end: ce } = highlightRange;
+              const isCurrentTTS = ttsState === 'playing' && ce > 0 && segEnd > cs && segStart < ce;
               if (!seg.annotation) {
                 return <span key={i} className={isCurrentTTS ? 'tts-highlight' : ''}>{seg.text}</span>;
               }
@@ -533,7 +537,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
                 {seg.text}
               </span>
             );
-          })}
+          })})()}
         </div>
       </div>
 
