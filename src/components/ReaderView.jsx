@@ -106,8 +106,9 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const ttsIdxRef = useRef(0);
   const isSpeakingRef = useRef(false);
 
-  // ── 系统语音列表（运行时填充）──
-  const [sysVoices, setSysVoices] = useState([]);
+  // ── 系统语音列表（ref 缓存，避免 playChunk 闭包过期）──
+  const sysVoicesRef = useRef([]);
+  const [sysVoices, setSysVoices] = useState([]); // 仅用于 UI 渲染
 
   const [showToolbar, setShowToolbar] = useState(false);
   const [toolbarPos, setToolbarPos] = useState({ x: 0, y: 0 });
@@ -238,6 +239,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       const zh = all.filter(v => v.lang.startsWith('zh'));
       if (zh.length > 0) {
         setSysVoices(zh);
+        sysVoicesRef.current = zh;
         if (!ttsVoice) {
           setTtsVoice(zh[0].name);
           ttsVoiceRef.current = zh[0].name;
@@ -272,13 +274,14 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     utter.lang = 'zh-CN';
     utter.rate = ttsSpeed;
     utter.volume = 1.0;
-    // 用缓存的语音列表，不用 getVoices()——Chrome 有时返回空数组导致回退默认语音
-    const picked = sysVoices.find(v => v.name === ttsVoiceRef.current) || sysVoices[0];
+    // 用 ref 语音列表——杜绝闭包过期导致回退默认语音
+    const voices = sysVoicesRef.current;
+    const picked = voices.find(v => v.name === ttsVoiceRef.current) || voices[0];
     if (picked) utter.voice = picked;
     utter.onend = () => { if (isSpeakingRef.current) playChunk(idx + 1); };
     utter.onerror = () => { if (isSpeakingRef.current) playChunk(idx + 1); };
     window.speechSynthesis.speak(utter);
-  }, [ttsSpeed, stopTTS, sysVoices]);
+  }, [ttsSpeed, stopTTS]);
 
   const startTTS = useCallback((fromIdx = 0) => {
     if (!book?.content) return;
