@@ -168,43 +168,67 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     setTimeout(() => { el.scrollTop = ratio * (el.scrollHeight - el.clientHeight); }, 300);
   }, [book?.readingProgress, book?.content]);
 
-  // ── selectionchange 驱动工具栏（防抖避免闪烁）──
+  // ── 工具栏触发：等用户松手 + 选区稳定后再弹出 ──
   const selTimerRef = useRef(null);
+  const userReleasedRef = useRef(false);
   const prevSelTextRef = useRef('');
+
+  // 松手后等待 400ms 无选区变更 → 弹出工具栏
+  const tryShowToolbar = useCallback(() => {
+    clearTimeout(selTimerRef.current);
+    selTimerRef.current = setTimeout(() => {
+      if (!userReleasedRef.current) return;
+      const offsets = getSelectionOffsets(contentRef.current);
+      const curText = (offsets && offsets.text.trim()) || '';
+
+      if (curText && curText !== prevSelTextRef.current) {
+        prevSelTextRef.current = curText;
+        setPendingRange(offsets);
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const rect = sel.getRangeAt(0).getBoundingClientRect();
+          setToolbarPos({
+            x: Math.min(rect.left + rect.width / 2, window.innerWidth - 200),
+            y: Math.max(rect.top - 80, 20), // 往上多偏移避开选中手柄
+          });
+        }
+        setShowToolbar(true);
+      } else if (!curText) {
+        setShowToolbar(false);
+        setPendingRange(null);
+        prevSelTextRef.current = '';
+      }
+    }, 400);
+  }, []);
+
   useEffect(() => {
     const onSelectionChange = () => {
-      clearTimeout(selTimerRef.current);
-      selTimerRef.current = setTimeout(() => {
-        const offsets = getSelectionOffsets(contentRef.current);
-        const curText = (offsets && offsets.text.trim()) || '';
-        const prevText = prevSelTextRef.current;
-        // 只有选区文字真正变化时才更新状态
-        if (curText === prevText) return;
-        prevSelTextRef.current = curText;
-
-        if (curText) {
-          setPendingRange(offsets);
-          const sel = window.getSelection();
-          if (sel && sel.rangeCount > 0) {
-            const rect = sel.getRangeAt(0).getBoundingClientRect();
-            setToolbarPos({
-              x: Math.min(rect.left + rect.width / 2, window.innerWidth - 200),
-              y: Math.max(rect.top - 56, 20),
-            });
-          }
-          setShowToolbar(true);
-        } else {
-          setShowToolbar(false);
-          setPendingRange(null);
-        }
-      }, 150); // 150ms 防抖
+      if (userReleasedRef.current) tryShowToolbar();
+    };
+    const onPointerUp = () => {
+      userReleasedRef.current = true;
+      tryShowToolbar();
+    };
+    const onPointerDown = () => {
+      // 用户开始新选择 → 隐藏旧工具栏
+      userReleasedRef.current = false;
+      setShowToolbar(false);
+      setPendingRange(null);
     };
     document.addEventListener('selectionchange', onSelectionChange);
+    document.addEventListener('mouseup', onPointerUp);
+    document.addEventListener('touchend', onPointerUp);
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('touchstart', onPointerDown, { passive: true });
     return () => {
       document.removeEventListener('selectionchange', onSelectionChange);
+      document.removeEventListener('mouseup', onPointerUp);
+      document.removeEventListener('touchend', onPointerUp);
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('touchstart', onPointerDown);
       clearTimeout(selTimerRef.current);
     };
-  }, []);
+  }, [tryShowToolbar]);
 
   // ── Esc 关闭 ──
   useEffect(() => {

@@ -2652,13 +2652,13 @@ button.focus-float-exit,
   background: rgba(128,128,128,.12); color: inherit;
 }
 
-/* 标注时的半透明遮罩 */
+/* 标注时的半透明遮罩 — 极淡，不遮挡选中文字 */
 .reader-overlay {
   position: fixed; inset: 0; z-index: 250;
-  background: rgba(0,0,0,.08);
+  background: rgba(0,0,0,.04);
   animation: fadeIn .2s ease;
 }
-.reader-masked .reader-topbar { opacity: .4; pointer-events: none; }
+.reader-masked .reader-topbar { opacity: .5; pointer-events: none; }
 
 .reader-text {
   max-width: 720px; margin: 0 auto;
