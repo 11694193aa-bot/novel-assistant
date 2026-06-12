@@ -500,20 +500,37 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       >
         <div className="reader-text" key={flashId || '0'}>
           {(() => {
+            const curChunk = currentChunkText;
+            const isPlaying = ttsState === 'playing' && curChunk;
+            // 把大段按句号拆成小句，逐个检查是否在当前 chunk 里
+            const splitBySentence = (text) => {
+              if (!isPlaying) return [{ text, match: false }];
+              if (text.length < curChunk.length && curChunk.includes(text.trim())) {
+                const t = text.trim();
+                return [{ text, match: t.length > 0 && /[一-鿿]/.test(t) }];
+              }
+              // 大段 → 拆句
+              const parts = text.split(/(?<=[。！？\n])/g);
+              return parts.map(p => {
+                const t = p.trim();
+                const match = t.length > 0 && /[一-鿿]/.test(t) && curChunk.includes(t);
+                return { text: p, match };
+              });
+            };
             let charPos = 0;
             return segments.map((seg, i) => {
               const segStart = charPos;
               const segEnd = charPos + seg.text.length;
               charPos = segEnd;
-              // 精确匹配：trim 后比较，容忍首尾空白差异
-              const curText = currentChunkText;
-              const segTrimmed = seg.text.trim();
-              const hasChinese = /[一-鿿]/.test(segTrimmed);
-              const isCurrentTTS = ttsState === 'playing' && curText && hasChinese &&
-                segTrimmed.length > 0 && segTrimmed.length < curText.length &&
-                curText.includes(segTrimmed);
+              const subSpans = splitBySentence(seg.text);
               if (!seg.annotation) {
-                return <span key={i} className={isCurrentTTS ? 'tts-highlight' : ''}>{seg.text}</span>;
+                return (
+                  <span key={i}>
+                    {subSpans.map((s, j) =>
+                      <span key={j} className={s.match ? 'tts-highlight' : ''}>{s.text}</span>
+                    )}
+                  </span>
+                );
               }
             const ann = seg.annotation;
             const color = ann.color;
@@ -530,15 +547,18 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
             } else if (ann.lineStyle === 'highlighter') {
               annStyle.background = `linear-gradient(transparent 55%, ${color}40 55%)`;
             }
+            // 标注段：保留标注样式，内层按句拆分做 TTS 高亮
             return (
               <span
                 key={i}
-                className={`annotation-mark${isCurrentTTS ? ' tts-highlight' : ''}`}
+                className="annotation-mark"
                 style={annStyle}
                 onClick={(e) => handleAnnotationClick(ann.id, e)}
                 title={`${LINE_STYLES.find(s => s.key === ann.lineStyle)?.label || ''} · 点击删除`}
               >
-                {seg.text}
+                {subSpans.map((s, j) =>
+                  <span key={j} className={s.match ? 'tts-highlight' : ''}>{s.text}</span>
+                )}
               </span>
             );
           })})()}
