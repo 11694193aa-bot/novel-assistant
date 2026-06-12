@@ -567,8 +567,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         <button className="reader-back-btn" onClick={onBack}>‹ 书房</button>
         <span className="reader-title">{book.title}</span>
 
-        {/* TTS 控制区 */}
-        <div className="reader-tts-group">
+        {/* TTS 控制区 — 仅桌面端 */}
+        {!isMobile && <div className="reader-tts-group">
           {/* 桌面端语音选择器 */}
           {!isMobile && sysVoices.length > 0 && (
             <select className="tts-voice-select" value={ttsVoice || ''} onChange={(e) => handleVoiceChange(e.target.value)} title="选择语音">
@@ -601,7 +601,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
           >
             {ttsState === 'playing' ? '⏸' : ttsState === 'paused' ? '▶' : '🔊'}
           </button>
-        </div>
+        </div>}
 
         {/* 标注侧边栏按钮（桌面端） */}
         {!isMobile && (
