@@ -161,6 +161,9 @@ export async function parsePDF(file) {
 function extractTextFromHTML(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
 
+  // [FIX] EPUB样式保留：加粗→** 斜体→*
+  doc.querySelectorAll('b, strong').forEach(el => { el.insertAdjacentText('beforebegin', '**'); el.insertAdjacentText('afterend', '**'); });
+  doc.querySelectorAll('i, em').forEach(el => { el.insertAdjacentText('beforebegin', '*'); el.insertAdjacentText('afterend', '*'); });
   // 移除不需要的元素
   doc.querySelectorAll('script, style, head, nav, [role="navigation"]').forEach(el => el.remove());
 

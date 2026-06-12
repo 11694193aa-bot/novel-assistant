@@ -573,8 +573,9 @@ const useStore = create((set, get) => ({
     }));
   },
 
+  // [FIX] annotation加updatedAt用于多端冲突合并
   addAnnotation: (bookId, annotation) => {
-    const ann = { id: uid(), ...annotation, createdAt: Date.now() };
+    const ann = { id: uid(), ...annotation, createdAt: Date.now(), updatedAt: Date.now() };
     set(s => ({
       readingBooks: s.readingBooks.map(b => b.id === bookId
         ? { ...b, annotations: [...(b.annotations || []), ann] }
@@ -593,11 +594,12 @@ const useStore = create((set, get) => ({
     }));
   },
 
+  // [FIX] 更新时同步刷新updatedAt
   updateAnnotation: (bookId, annotationId, updates) => {
     set(s => ({
       readingBooks: s.readingBooks.map(b => b.id === bookId
         ? { ...b, annotations: (b.annotations || []).map(a =>
-            a.id === annotationId ? { ...a, ...updates } : a) }
+            a.id === annotationId ? { ...a, ...updates, updatedAt: Date.now() } : a) }
         : b),
       dirty: true,
     }));
