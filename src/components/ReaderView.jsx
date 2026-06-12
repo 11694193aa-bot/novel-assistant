@@ -505,11 +505,13 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
               const segStart = charPos;
               const segEnd = charPos + seg.text.length;
               charPos = segEnd;
-              // 用 state 而非 ref，保证渲染时文本一定匹配当前实际播放句
+              // 精确匹配：trim 后比较，容忍首尾空白差异
               const curText = currentChunkText;
-              const hasChinese = /[一-鿿]/.test(seg.text);
+              const segTrimmed = seg.text.trim();
+              const hasChinese = /[一-鿿]/.test(segTrimmed);
               const isCurrentTTS = ttsState === 'playing' && curText && hasChinese &&
-                seg.text.length < curText.length && curText.includes(seg.text);
+                segTrimmed.length > 0 && segTrimmed.length < curText.length &&
+                curText.includes(segTrimmed);
               if (!seg.annotation) {
                 return <span key={i} className={isCurrentTTS ? 'tts-highlight' : ''}>{seg.text}</span>;
               }
