@@ -25,6 +25,14 @@ export async function onRequest({ request, env }) {
       return new Response(JSON.stringify({ ok: true, data: raw ? JSON.parse(raw) : null }), { headers });
     }
 
+    // 从历史备份恢复数据
+    if (body.action === 'restore' && body.key) {
+      const raw = await env.SYNC.get(body.key);
+      if (!raw) return new Response(JSON.stringify({ ok: false, error: 'backup not found' }), { headers });
+      await env.SYNC.put('data', raw);
+      return new Response(JSON.stringify({ ok: true, restored: true }), { headers });
+    }
+
     const [raw, iconList] = await Promise.all([
       env.SYNC.get('data'),
       env.SYNC.list({ prefix: 'icon_' }),
