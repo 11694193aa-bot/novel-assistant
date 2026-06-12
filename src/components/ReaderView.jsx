@@ -205,11 +205,13 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     const onSelectionChange = () => {
       if (userReleasedRef.current) tryShowToolbar();
     };
-    const onPointerUp = () => {
+    const onPointerUp = (e) => {
       userReleasedRef.current = true;
       tryShowToolbar();
     };
-    const onPointerDown = () => {
+    const onPointerDown = (e) => {
+      // 点工具栏内部 → 不关
+      if (e.target.closest('.annotation-toolbar')) return;
       // 用户开始新选择 → 隐藏旧工具栏
       userReleasedRef.current = false;
       setShowToolbar(false);
@@ -526,7 +528,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         className="reader-content"
         onScroll={saveProgress}
       >
-        <div className="reader-text">
+        <div className="reader-text" key={flashId || '0'}>
           {segments.map((seg, i) => {
             const isCurrentTTS = currentSentence >= 0 && seg.text === sentencesRef.current[currentSentence];
             if (!seg.annotation) {
