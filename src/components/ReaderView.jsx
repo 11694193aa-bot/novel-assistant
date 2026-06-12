@@ -113,6 +113,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [toolbarPos, setToolbarPos] = useState({ x: 0, y: 0 });
   const [selectedColor, setSelectedColor] = useState(ANNOTATION_COLORS[0].value);
   const [selectedStyle, setSelectedStyle] = useState('wavy');
+  const [annotationNote, setAnnotationNote] = useState(''); // [FIX] 标注备注
   const [pendingRange, setPendingRange] = useState(null);
   // [FIX-4] flashId 已废弃，segments 不再依赖它触发重渲染
   const [deleteTarget, setDeleteTarget] = useState(null); // 待删除标注 id
@@ -181,7 +182,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         if (sel && sel.rangeCount > 0) {
           const rect = sel.getRangeAt(0).getBoundingClientRect();
           setToolbarPos({
-            x: Math.min(rect.left + rect.width / 2, window.innerWidth - 200),
+            x: Math.max(120, Math.min(rect.left + rect.width / 2, window.innerWidth - 120)),
             y: Math.max(rect.top - 80, 20),
           });
         }
@@ -419,9 +420,18 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     setTtsState('playing');
     // [FIX-1] rAF 确保 DOM 分句渲染完毕后再开始朗读
     const gen = ttsGenRef.current;
+    // [FIX] 若未指定 fromIdx，从当前滚动位置估算起始 chunk
+    const startIdx = fromIdx > 0 ? fromIdx : (() => {
+      const el = contentRef.current;
+      if (!el || !book?.content) return 0;
+      const ratio = el.scrollTop / (el.scrollHeight - el.clientHeight || 1);
+      const approx = Math.floor(ratio * book.content.length);
+      const idx = ttsChunkOffsetsRef.current.findIndex(o => o >= approx);
+      return Math.max(0, idx - 1);
+    })();
     const fn = isMobile ? playCloud : speakLocal;
     requestAnimationFrame(() => {
-      fn(Math.min(fromIdx, chunks.length - 1), gen);
+      fn(Math.min(startIdx, chunks.length - 1), gen);
     });
   }, [book?.content, stopTTS, isMobile, speakLocal, playCloud]);
 
@@ -467,8 +477,9 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       color: selectedColor,
       lineStyle: selectedStyle,
       selectedText: pendingRange.text,
-      note: '',
+      note: annotationNote,
     });
+    setAnnotationNote('');
     // [FIX-1] 直接使用组件顶层解构的 persist，不再跨组件调用 getState
     persist(true);
     // [FIX-4] flashId 已删除，segments 通过 book.annotations 引用变化自动重渲染
@@ -568,7 +579,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         className="reader-content"
         onScroll={saveProgress}
       >
-        <div className="reader-text" key="reader-text-stable">
+        <div className="reader-text" key="reader-text-stable" style={{ userSelect: ttsState === 'playing' ? 'none' : 'text' }}>
           {(() => {
             const curChunk = currentChunkText;
             const isPlaying = ttsState === 'playing' && curChunk;
@@ -626,7 +637,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
                 className="annotation-mark"
                 style={annStyle}
                 onClick={(e) => handleAnnotationClick(ann.id, e)}
-                title={`${LINE_STYLES.find(s => s.key === ann.lineStyle)?.label || ''} · 点击删除`}
+                title={`${LINE_STYLES.find(s => s.key === ann.lineStyle)?.label || ''}${ann.note ? ' · ' + ann.note : ''} · 点击删除`}
               >
                 {subSpans.map((s, j) =>
                   <span key={j} className={s.match ? 'tts-highlight' : ''}>{s.text}</span>
@@ -674,6 +685,15 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
                 <span className="ann-style-label">{s.label}</span>
               </button>
             ))}
+          </div>
+          <div className="ann-note">
+            <input
+              className="ann-note-input"
+              type="text"
+              placeholder="备注（可选）"
+              value={annotationNote}
+              onChange={(e) => setAnnotationNote(e.target.value)}
+            />
           </div>
           <div className="ann-actions">
             <button className="ann-confirm-btn" onClick={handleConfirmAnnotation}>✓ 标记</button>

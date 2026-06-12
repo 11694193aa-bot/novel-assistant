@@ -11,10 +11,22 @@ import * as pdfjsLib from 'pdfjs-dist';
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
 
 // ─── TXT 解析 ─────────────────────────────────────────────
+// [FIX] GBK 编码自动检测——大量国内小说 TXT 是 GBK 编码
 export async function parseTXT(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result || '');
+    reader.onload = () => {
+      const text = reader.result || '';
+      // GBK 乱码通常包含 � 替换字符
+      if (text.includes('�')) {
+        const r2 = new FileReader();
+        r2.onload = () => resolve(r2.result || '');
+        r2.onerror = () => reject(new Error('TXT 读取失败'));
+        try { r2.readAsText(file, 'gbk'); } catch (_) { r2.readAsText(file, 'gb2312'); }
+      } else {
+        resolve(text);
+      }
+    };
     reader.onerror = () => reject(new Error('TXT 读取失败'));
     reader.readAsText(file, 'utf-8');
   });

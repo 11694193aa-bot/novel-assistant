@@ -2745,6 +2745,16 @@ button.focus-float-exit,
 .ann-style-icon { font-size: 16px; }
 .ann-style-label { font-size: 10px; }
 
+/* 备注输入 */
+.ann-note { width: 100%; }
+.ann-note-input {
+  width: 100%; padding: 6px 10px; border-radius: 12px;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  background: var(--bg); color: var(--text2); outline: none;
+  border: 1px solid var(--border) !important;
+}
+.ann-note-input::placeholder { color: var(--text3); opacity: .6; }
+
 /* 确认/取消 */
 .ann-actions {
   display: flex; gap: 8px; justify-content: flex-end;
