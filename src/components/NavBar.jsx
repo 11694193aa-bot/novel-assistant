@@ -37,7 +37,8 @@ function getGlobalInput(cb) {
 
 export default function NavBar({ activeTab, onTabChange, onGachaClick, onQuickNote, onFilmNote, onCalendarClick, onTrashClick }) {
   const [collapsed, setCollapsed] = useState(false);
-  const { settings, updateSettings } = useStore();
+  // [FIX-2] 顶层解构 persist，避免 getState() 跨组件调用
+  const { settings, updateSettings, persist } = useStore();
   const longRef = useRef(null);
   const justLongRef = useRef(false);
 
@@ -128,7 +129,8 @@ export default function NavBar({ activeTab, onTabChange, onGachaClick, onQuickNo
       </div>
 
       {/* 保存到云端按钮 */}
-      <button className="nav-save-btn" onClick={() => { useStore.getState().persist(); }} title="保存到云端 (Ctrl+Shift+S)">
+      // [FIX-2] 直接调用解构的 persist
+      <button className="nav-save-btn" onClick={() => persist()} title="保存到云端 (Ctrl+Shift+S)">
         <CatIcon name="import" size={16} /> <span className="tab-label">保存</span>
       </button>
       {/* 收起按钮 */}

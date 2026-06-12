@@ -104,6 +104,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
   const contentRef = useRef(null);
   const ttsChunksRef = useRef([]);
+  // [FIX-1] 预存每个 chunk 在全文的起始偏移，避免 speakLocal 里 O(n²) 累加
+  const ttsChunkOffsetsRef = useRef([]);
   const ttsIdxRef = useRef(0);
   const isSpeakingRef = useRef(false);
 
@@ -112,7 +114,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [selectedColor, setSelectedColor] = useState(ANNOTATION_COLORS[0].value);
   const [selectedStyle, setSelectedStyle] = useState('wavy');
   const [pendingRange, setPendingRange] = useState(null);
-  const [flashId, setFlashId] = useState(null);
+  // [FIX-4] flashId 已废弃，segments 不再依赖它触发重渲染
   const [deleteTarget, setDeleteTarget] = useState(null); // 待删除标注 id
   const [ttsState, setTtsState] = useState('idle'); // idle | playing | paused
   const [ttsSpeed, setTtsSpeed] = useState(1);
@@ -237,6 +239,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const ttsAudioRef = useRef(null);
   const ttsAbortRef = useRef(null);
   const ttsGenRef = useRef(0);     // generation 防竞态
+  // [FIX-5] 滚动速度缓存，切 chunk 时更新，tick 里直接读
+  const scrollPxPerMsRef = useRef(0.1);
   const scrollRAF = useRef(null);  // 持续滚动动画帧
 
   // ── 桌面端：加载系统语音 ──
@@ -278,13 +282,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       if (!isSpeakingRef.current) { scrollRAF.current = null; return; }
       const dt = Math.min(now - last, 100); // 防止 tab 切后台后一跳到底
       last = now;
-      const msPerChar = 80 / (ttsSpeedRef.current || 1);
-      // [FIX-4] 用剩余字数计算总时长，避免进度失真
-      const remainingChars = ttsChunksRef.current
-        .slice(ttsIdxRef.current)
-        .reduce((s,t) => s + t.length, 0);
-      const totalMs = (remainingChars || 1) * msPerChar;
-      const pxPerMs = totalH / totalMs;
+      // [FIX-5] 直接读缓存的速度，不再每帧重算
+      const pxPerMs = scrollPxPerMsRef.current || 0.1;
       el.scrollTop += pxPerMs * dt;
       scrollRAF.current = requestAnimationFrame(tick);
     };
@@ -314,10 +313,13 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     setCurrentSentence(idx);
     setCurrentChunkText(chunk);
 
-    // 计算当前 chunk 在全文的起始偏移
-    let chunkStart = 0;
-    for (let j = 0; j < idx; j++) chunkStart += chunks[j].length;
+    // [FIX-1] O(1) 读预存偏移
+    const chunkStart = ttsChunkOffsetsRef.current[idx] ?? 0;
     setCurrentChunkOffset(chunkStart);
+    // [FIX-5] 更新滚动速度
+    const remaining = chunks.slice(idx).reduce((s,t) => s + t.length, 0);
+    const h = contentRef.current ? contentRef.current.scrollHeight - contentRef.current.clientHeight : 1;
+    scrollPxPerMsRef.current = h / ((remaining || 1) * (80 / (ttsSpeedRef.current || 1)));
 
     // [FIX] onboundary 降级标记：2秒内未触发则高亮整个 chunk
     let boundaryFired = false;
@@ -407,6 +409,11 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     const limit = isMobile ? 180 : 300;
     for (const s of raw) { buf += s; if (buf.length >= limit) { chunks.push(buf); buf = ''; } }
     if (buf.trim()) chunks.push(buf);
+    // [FIX-1] 预存偏移避免 speakLocal 里反复累加
+    const offsets = [];
+    let off = 0;
+    for (const c of chunks) { offsets.push(off); off += c.length; }
+    ttsChunkOffsetsRef.current = offsets;
     ttsChunksRef.current = chunks;
     isSpeakingRef.current = true;
     setTtsState('playing');
@@ -464,7 +471,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     });
     // [FIX-1] 直接使用组件顶层解构的 persist，不再跨组件调用 getState
     persist(true);
-    setFlashId(Date.now());
+    // [FIX-4] flashId 已删除，segments 通过 book.annotations 引用变化自动重渲染
     setShowToolbar(false);
     setPendingRange(null);
     window.getSelection()?.removeAllRanges();

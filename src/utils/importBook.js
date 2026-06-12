@@ -69,7 +69,14 @@ export async function parseEPUB(file) {
       if (coverFile) {
         const coverBuf = await coverFile.async('arraybuffer');
         const mime = manifestMap[coverId].type || 'image/jpeg';
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(coverBuf)));
+        // [FIX-3] 分块转 base64，避免大封面栈溢出
+        const bytes = new Uint8Array(coverBuf);
+        let binary = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+        }
+        const base64 = btoa(binary);
         cover = `data:${mime};base64,${base64}`;
       }
     } catch (_) { /* 封面提取失败忽略 */ }
@@ -118,17 +125,19 @@ export async function parsePDF(file) {
     reader.readAsArrayBuffer(file);
   });
 
+  // [FIX-6] 并发提取所有页面文字
   const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
-  const parts = [];
-
+  const pagePromises = [];
   for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items.map(item => item.str).join('');
-    if (pageText.trim()) parts.push(pageText.trim());
+    pagePromises.push(
+      pdf.getPage(i).then(page => page.getTextContent()).then(content => {
+        const text = content.items.map(item => item.str).join('');
+        return text.trim() ? text.trim() : null;
+      })
+    );
   }
-
-  return parts.join('\n\n');
+  const results = await Promise.all(pagePromises);
+  return results.filter(Boolean).join('\n\n');
 }
 
 // ─── HTML → 纯文本 ─────────────────────────────────────────
