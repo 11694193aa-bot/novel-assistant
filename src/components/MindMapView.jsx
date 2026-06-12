@@ -178,7 +178,7 @@ export default function MindMapView({ books, selectedBookId, onSelectBook, focus
         const area = r.width * r.height;
         if (!best || area < best.area) {
           const ry = cy - r.top;
-          const band = r.height * 0.25;
+          const band = Math.max(r.height * 0.2, 12);
           const pos = ry < band ? 'before' : ry > r.height - band ? 'after' : 'inside';
           best = { tid, pos, area };
         }

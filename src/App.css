@@ -2810,6 +2810,46 @@ button.focus-float-exit,
 .reader-modal-btn-cancel:hover { background: var(--hover); }
 .reader-modal-btn-cancel:active { transform: scale(.95); }
 
+/* 标注侧边栏 */
+.ann-sidebar {
+  position: absolute; right: 0; top: 0; bottom: 0; z-index: 150;
+  width: 260px; background: var(--card);
+  box-shadow: -4px 0 20px rgba(0,0,0,.08);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: fadeIn .15s ease;
+}
+.ann-sidebar-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; font-weight: 700; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.ann-sidebar-close {
+  width: 28px; height: 28px; border-radius: 10px;
+  background: var(--bg); cursor: pointer; font-size: 14px;
+  color: var(--text3); display: flex; align-items: center; justify-content: center;
+}
+.ann-sidebar-close:hover { background: var(--hover); }
+.ann-sidebar-empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: var(--text3); font-size: 13px;
+}
+.ann-sidebar-list { flex: 1; overflow-y: auto; padding: 8px; }
+.ann-sidebar-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 10px 12px; border-radius: 12px; cursor: pointer;
+  transition: .12s; margin-bottom: 4px;
+}
+.ann-sidebar-item:hover { background: var(--hover); }
+.ann-sidebar-item-text {
+  flex: 1; font-size: 12px; line-height: 1.6; color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ann-sidebar-item-note {
+  font-size: 11px; color: var(--pink); margin-top: 2px;
+  font-style: italic;
+}
+
 /* ── 手机端适配 ── */
 @media (max-width: 768px) {
   .reader-text {

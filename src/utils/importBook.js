@@ -143,7 +143,12 @@ export async function parsePDF(file) {
   for (let i = 1; i <= pdf.numPages; i++) {
     pagePromises.push(
       pdf.getPage(i).then(page => page.getTextContent()).then(content => {
-        const text = content.items.map(item => item.str).join('');
+        // [FIX] 判断相邻item间距，需要时补空格
+        const text = content.items.map((item, i, arr) => {
+          const next = arr[i + 1];
+          const needSpace = next && item.transform[4] + item.width < next.transform[4] - 1;
+          return item.str + (needSpace ? ' ' : '');
+        }).join('');
         return text.trim() ? text.trim() : null;
       })
     );
@@ -164,9 +169,9 @@ function extractTextFromHTML(html) {
     el.insertAdjacentText('afterend', '\n');
   });
 
-  // 标题前多加空行
+  // [FIX] 标题前加章节分隔标记
   doc.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(el => {
-    el.insertAdjacentText('beforebegin', '\n');
+    el.insertAdjacentText('beforebegin', '\n【' + (el.textContent?.trim() || '章节') + '】\n');
   });
 
   let text = doc.body?.textContent || doc.body?.innerText || '';

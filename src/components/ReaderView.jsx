@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import useStore from '../store';
 import CatIcon from './CatIcon';
+import AnnotationSidebar from './AnnotationSidebar';
 
 // ─── 标注颜色 ─────────────────────────────────────────────
 const ANNOTATION_COLORS = [
@@ -117,6 +118,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [pendingRange, setPendingRange] = useState(null);
   // [FIX-4] flashId 已废弃，segments 不再依赖它触发重渲染
   const [deleteTarget, setDeleteTarget] = useState(null); // 待删除标注 id
+  const [showAnnSidebar, setShowAnnSidebar] = useState(false);
   const [ttsState, setTtsState] = useState('idle'); // idle | playing | paused
   const [ttsSpeed, setTtsSpeed] = useState(1);
   const ttsSpeedRef = useRef(1);
@@ -598,6 +600,13 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
           </button>
         </div>
 
+        {/* 标注侧边栏按钮（桌面端） */}
+        {!isMobile && (
+          <button className="tts-btn" onClick={() => setShowAnnSidebar(!showAnnSidebar)} title="标注列表"
+            style={showAnnSidebar ? {background:'var(--pink3)',color:'var(--pink)'} : {}}>
+            📋
+          </button>
+        )}
         <span className="reader-progress">
           {book.annotations?.length > 0 && `${book.annotations.length}条笔记 · `}
           {book.totalChars >= 10000
@@ -611,6 +620,16 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         ref={(el) => { contentRef.current = el; restoreReadingProgress(el); }}
         className="reader-content"
         onScroll={saveProgress}
+        onDoubleClick={(e) => {
+          if (isMobile) return;
+          const sel = window.getSelection();
+          if (!sel || !sel.rangeCount) return;
+          const offsets = getSelectionOffsets(contentRef.current);
+          if (!offsets) return;
+          // 估算点击位置在全文的偏移，找到对应 chunk 开始朗读
+          const idx = ttsChunkOffsetsRef.current.findIndex(o => o >= offsets.start);
+          startTTS(Math.max(0, idx >= 0 ? idx : 0));
+        }}
       >
         <div className="reader-text" key="reader-text-stable" style={{ userSelect: ttsState === 'playing' ? 'none' : 'text' }}>
           {(() => {
@@ -748,6 +767,17 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
             </div>
           </div>
         </div>
+      )}
+      {/* 标注侧边栏 */}
+      {showAnnSidebar && (
+        <AnnotationSidebar
+          bookId={bookId}
+          onJump={(ratio) => {
+            const el = contentRef.current;
+            if (el) el.scrollTop = ratio * (el.scrollHeight - el.clientHeight);
+          }}
+          onClose={() => setShowAnnSidebar(false)}
+        />
       )}
     </div>
   );

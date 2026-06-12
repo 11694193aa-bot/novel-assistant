@@ -106,6 +106,7 @@ export default function ReadingBookList({ isMobile, onSelectBook, onOpenReader }
               key={b.id}
               className="reading-book-card"
               onClick={() => { if (!editingId && onOpenReader) onOpenReader(b.id); }}
+              onDoubleClick={(e) => { e.stopPropagation(); setEditingId(b.id); }}
               onContextMenu={(e) => { e.preventDefault(); setEditingId(b.id); }}
               // [FIX-5] 长按 timer 存 ref，不再挂 DOM 属性
               onTouchStart={() => { longPressRef.current = setTimeout(() => setEditingId(b.id), 600); }}
