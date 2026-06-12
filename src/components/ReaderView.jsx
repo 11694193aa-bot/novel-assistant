@@ -102,10 +102,33 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const book = readingBooks.find(b => b.id === bookId);
 
   const contentRef = useRef(null);
-  const ttsRef = useRef(null);        // SpeechSynthesisUtterance 实例
-  const sentIdxRef = useRef(0);       // 当前句子索引
-  const sentencesRef = useRef([]);    // 句子列表
+  const ttsChunksRef = useRef([]);
+  const ttsIdxRef = useRef(0);
   const isSpeakingRef = useRef(false);
+
+  // ── Edge TTS 中文语音列表 ──
+  const EDGE_VOICES = [
+    { name: 'zh-CN-XiaoxiaoNeural', label: '晓晓 (女·自然)' },
+    { name: 'zh-CN-YunxiNeural', label: '云希 (男·自然)' },
+    { name: 'zh-CN-YunjianNeural', label: '云健 (男·成熟)' },
+    { name: 'zh-CN-XiaoyiNeural', label: '晓伊 (女)' },
+    { name: 'zh-CN-YunyangNeural', label: '云扬 (男·新闻)' },
+    { name: 'zh-CN-XiaochenNeural', label: '晓辰 (女)' },
+    { name: 'zh-CN-XiaohanNeural', label: '晓涵 (女)' },
+    { name: 'zh-CN-XiaomengNeural', label: '晓梦 (女)' },
+    { name: 'zh-CN-XiaomoNeural', label: '晓墨 (女)' },
+    { name: 'zh-CN-XiaoqiuNeural', label: '晓秋 (女)' },
+    { name: 'zh-CN-XiaoruiNeural', label: '晓睿 (女)' },
+    { name: 'zh-CN-XiaoshuangNeural', label: '晓双 (女)' },
+    { name: 'zh-CN-XiaoxuanNeural', label: '晓萱 (女)' },
+    { name: 'zh-CN-XiaoyanNeural', label: '晓颜 (女)' },
+    { name: 'zh-CN-XiaoyouNeural', label: '晓悠 (女·童声)' },
+    { name: 'zh-CN-YunfengNeural', label: '云枫 (男)' },
+    { name: 'zh-CN-YunhaoNeural', label: '云皓 (男)' },
+    { name: 'zh-CN-YunxiaNeural', label: '云夏 (男)' },
+    { name: 'zh-CN-YunyeNeural', label: '云野 (男)' },
+    { name: 'zh-CN-YunzeNeural', label: '云泽 (男)' },
+  ];
 
   const [showToolbar, setShowToolbar] = useState(false);
   const [toolbarPos, setToolbarPos] = useState({ x: 0, y: 0 });
@@ -116,9 +139,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [deleteTarget, setDeleteTarget] = useState(null); // 待删除标注 id
   const [ttsState, setTtsState] = useState('idle'); // idle | playing | paused
   const [ttsSpeed, setTtsSpeed] = useState(1);
-  const [ttsVoice, setTtsVoice] = useState(null);   // 选中的语音名
-  const ttsVoiceRef = useRef(null);                   // ref 版，保证 speakSentence 闭包里是最新值
-  const [availableVoices, setAvailableVoices] = useState([]);
+  const [ttsVoice, setTtsVoice] = useState(EDGE_VOICES[0].name); // 默认晓晓
+  const ttsVoiceRef = useRef(EDGE_VOICES[0].name);
   const [currentSentence, setCurrentSentence] = useState(-1);
   const progressRestored = useRef(false);
 
@@ -127,24 +149,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
   // 切换书籍时停止朗读
   useEffect(() => {
-    return () => { window.speechSynthesis?.cancel(); setTtsState('idle'); };
+    return () => { isSpeakingRef.current = false; setTtsState('idle'); };
   }, [bookId]);
-
-  // ── 加载可用语音列表 ──
-  useEffect(() => {
-    const loadVoices = () => {
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        setAvailableVoices(voices);
-        // 默认选中第一个中文语音
-        const zh = voices.find(v => v.lang.startsWith('zh'));
-        if (zh && !ttsVoice) setTtsVoice(zh.name);
-      }
-    };
-    loadVoices();
-    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
-    return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
-  }, []);
 
   // ── 滚动时保存进度（节流 2 秒）──
   const scrollTimerRef = useRef(null);
@@ -246,88 +252,111 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     return () => window.removeEventListener('keydown', h);
   }, [isMobile]);
 
-  // ── TTS：健壮朗读引擎 ──────────────────────────────────
-  const ttsIdxRef = useRef(0);
-  const ttsChunksRef = useRef([]);
-  const ttsWatchdogRef = useRef(null);
-  const ttsKeepAliveRef = useRef(null);
-  const ttsLastStartRef = useRef(0);
-  const ttsGenRef = useRef(0);  // generation 计数器，拒绝过期回调
-
-  const clearTTSTimers = useCallback(() => {
-    clearTimeout(ttsWatchdogRef.current);
-    clearInterval(ttsKeepAliveRef.current);
-  }, []);
+  // ── Edge TTS 引擎（fetch → Audio 播放）─────────────────
+  const ttsAudioRef = useRef(null);      // 当前 Audio 元素
+  const ttsNextAudioRef = useRef(null);  // 预缓冲的下一段
+  const ttsAbortRef = useRef(null);      // AbortController
 
   const stopTTS = useCallback(() => {
-    clearTTSTimers();
-    ttsGenRef.current++;  // 作废所有进行中的回调
-    window.speechSynthesis?.cancel();
+    ttsAbortRef.current?.abort();
+    ttsAudioRef.current?.pause();
+    ttsAudioRef.current = null;
+    ttsNextAudioRef.current = null;
     isSpeakingRef.current = false;
     setTtsState('idle');
     setCurrentSentence(-1);
-  }, [clearTTSTimers]);
+  }, []);
 
-  const speakChunk = useCallback((idx, gen) => {
+  // 获取一段音频（带重试）
+  const fetchAudio = useCallback(async (text, voice, rate, signal) => {
+    let lastErr;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, voice, rate }),
+          signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        return URL.createObjectURL(blob);
+      } catch (e) {
+        lastErr = e;
+        if (signal?.aborted) throw e;
+        if (attempt === 0) await new Promise(r => setTimeout(r, 500));
+      }
+    }
+    throw lastErr;
+  }, []);
+
+  // 播放指定块
+  const playChunk = useCallback((idx) => {
     const chunks = ttsChunksRef.current;
     if (idx >= chunks.length) { stopTTS(); return; }
-    // 拒绝过期 generation 的回调
-    if (gen !== undefined && gen !== ttsGenRef.current) return;
-
-    const synth = window.speechSynthesis;
     ttsIdxRef.current = idx;
-    const curGen = ttsGenRef.current;
-    const utter = new SpeechSynthesisUtterance(chunks[idx]);
-    utter.lang = 'zh-CN';
-    utter.rate = ttsSpeed;
-    utter.volume = 1.0;
+    setCurrentSentence(idx);
 
-    const voices = synth.getVoices();
-    const picked = voices.find(v => v.name === ttsVoiceRef.current);
-    const zhVoice = picked || voices.find(v => v.lang.startsWith('zh'));
-    if (zhVoice) utter.voice = zhVoice;
+    // 滚动跟随
+    let cc = 0;
+    for (let j = 0; j < idx; j++) cc += chunks[j].length;
+    const total = chunks.reduce((s, t) => s + t.length, 0);
+    const el = contentRef.current;
+    if (el) el.scrollTop = (cc / (total || 1)) * (el.scrollHeight - el.clientHeight);
 
-    utter.onstart = () => {
-      if (ttsGenRef.current !== curGen) return;
-      ttsLastStartRef.current = Date.now();
-      setCurrentSentence(idx);
-      let cc = 0;
-      for (let j = 0; j < idx; j++) cc += chunks[j].length;
-      const total = chunks.reduce((s, t) => s + t.length, 0);
-      const el = contentRef.current;
-      if (el) el.scrollTop = (cc / (total || 1)) * (el.scrollHeight - el.clientHeight);
-    };
+    const audio = ttsNextAudioRef.current;
+    ttsNextAudioRef.current = null;
+    ttsAudioRef.current = audio;
 
-    utter.onend = () => {
-      if (ttsGenRef.current !== curGen) return;
-      if (isSpeakingRef.current) speakChunk(idx + 1, curGen);
-    };
-
-    utter.onerror = (e) => {
-      if (ttsGenRef.current !== curGen) return;
-      if (e.error === 'canceled' || e.error === 'interrupted') return;
-      if (isSpeakingRef.current) speakChunk(idx + 1, curGen);
-    };
-
-    // 看门狗
-    clearTimeout(ttsWatchdogRef.current);
-    ttsWatchdogRef.current = setTimeout(() => {
-      if (!isSpeakingRef.current || ttsGenRef.current !== curGen) return;
-      if (Date.now() - ttsLastStartRef.current > 12000) {
-        synth.cancel();
-        setTimeout(() => { if (isSpeakingRef.current) speakChunk(ttsIdxRef.current, curGen); }, 200);
+    if (!audio) {
+      // 没有预缓冲，直接请求
+      const abort = new AbortController();
+      ttsAbortRef.current = abort;
+      fetchAudio(chunks[idx], ttsVoiceRef.current, ttsSpeed, abort.signal).then(url => {
+        if (!isSpeakingRef.current) { URL.revokeObjectURL(url); return; }
+        const a = new Audio(url);
+        a.onended = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playChunk(idx + 1); };
+        a.onerror = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playChunk(idx + 1); };
+        a.play().catch(() => { if (isSpeakingRef.current) playChunk(idx + 1); });
+        ttsAudioRef.current = a;
+      }).catch(() => { if (isSpeakingRef.current) playChunk(idx + 1); });
+      // 预缓冲下一段
+      if (idx + 1 < chunks.length) {
+        const nextAbort = new AbortController();
+        fetchAudio(chunks[idx + 1], ttsVoiceRef.current, ttsSpeed, nextAbort.signal).then(url => {
+          if (isSpeakingRef.current) {
+            const a = new Audio(url);
+            a.preload = 'auto';
+            a.onerror = () => URL.revokeObjectURL(url);
+            ttsNextAudioRef.current = a;
+          } else { URL.revokeObjectURL(url); }
+        }).catch(() => {});
       }
-    }, 15000);
+      return;
+    }
 
-    synth.speak(utter);
-  }, [ttsSpeed, stopTTS]);
+    // 用预缓冲的 audio
+    audio.onended = () => { if (isSpeakingRef.current) playChunk(idx + 1); };
+    audio.onerror = () => { if (isSpeakingRef.current) playChunk(idx + 1); };
+    audio.play().catch(() => { if (isSpeakingRef.current) playChunk(idx + 1); });
+
+    // 预缓冲下一段
+    if (idx + 1 < chunks.length) {
+      const nextAbort = new AbortController();
+      fetchAudio(chunks[idx + 1], ttsVoiceRef.current, ttsSpeed, nextAbort.signal).then(url => {
+        if (isSpeakingRef.current) {
+          const a = new Audio(url);
+          a.preload = 'auto';
+          a.onerror = () => URL.revokeObjectURL(url);
+          ttsNextAudioRef.current = a;
+        } else { URL.revokeObjectURL(url); }
+      }).catch(() => {});
+    }
+  }, [ttsSpeed, stopTTS, fetchAudio]);
 
   const startTTS = useCallback((fromIdx = 0) => {
     if (!book?.content) return;
-    const synth = window.speechSynthesis;
-    synth.cancel();
-    clearTTSTimers();
-    ttsGenRef.current++;  // 新 generation
+    stopTTS();
 
     const chunks = [];
     const raw = splitSentences(book.content);
@@ -339,65 +368,40 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     if (buf.trim()) chunks.push(buf);
     ttsChunksRef.current = chunks;
     ttsIdxRef.current = Math.min(fromIdx, chunks.length - 1);
-
     isSpeakingRef.current = true;
     setTtsState('playing');
-
-    ttsKeepAliveRef.current = setInterval(() => {
-      if (isSpeakingRef.current && synth.paused) synth.resume();
-    }, 8000);
-
-    const gen = ttsGenRef.current;
-    const doStart = () => speakChunk(ttsIdxRef.current, gen);
-    if (synth.getVoices().length === 0) {
-      synth.addEventListener('voiceschanged', doStart, { once: true });
-    } else {
-      doStart();
-    }
-  }, [book?.content, clearTTSTimers, speakChunk]);
+    playChunk(ttsIdxRef.current);
+  }, [book?.content, stopTTS, playChunk]);
 
   const handleTTS = useCallback(() => {
-    const synth = window.speechSynthesis;
-    if (!synth) { alert('浏览器不支持语音朗读'); return; }
-
     if (ttsState === 'playing') {
-      synth.pause();
-      clearTTSTimers();
+      ttsAudioRef.current?.pause();
+      ttsAbortRef.current?.abort();
       setTtsState('paused');
       isSpeakingRef.current = false;
     } else if (ttsState === 'paused') {
-      synth.resume();
       isSpeakingRef.current = true;
       setTtsState('playing');
+      ttsAudioRef.current?.play().catch(() => {});
     } else {
       startTTS(0);
     }
-  }, [ttsState, startTTS, clearTTSTimers]);
+  }, [ttsState, startTTS]);
 
   const handleTTSStop = useCallback(() => stopTTS(), [stopTTS]);
 
-  // 语音切换：直接取消 + 从当前块用新语音继续
   const handleVoiceChange = useCallback((voiceName) => {
     setTtsVoice(voiceName);
     ttsVoiceRef.current = voiceName;
     if (!isSpeakingRef.current) return;
+    // 正在播放且切语音 → 从当前块用新语音重启
     const curIdx = ttsIdxRef.current;
-    window.speechSynthesis.cancel();
-    // 等 cancel 生效后重启
-    setTimeout(() => {
-      if (!isSpeakingRef.current) return;
-      isSpeakingRef.current = false; // startTTS 里会重设 true
-      startTTS(curIdx);
-    }, 200);
-  }, [startTTS]);
+    stopTTS();
+    setTimeout(() => startTTS(curIdx), 100);
+  }, [stopTTS, startTTS]);
 
   // 卸载时清理
-  useEffect(() => {
-    return () => {
-      clearTTSTimers();
-      window.speechSynthesis?.cancel();
-    };
-  }, [clearTTSTimers]);
+  useEffect(() => () => stopTTS(), [stopTTS]);
 
   // ── 确认标注 ──
   const handleConfirmAnnotation = () => {
@@ -459,28 +463,17 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
         {/* TTS 控制区 */}
         <div className="reader-tts-group">
-          {/* 语音选择器（始终可见） */}
-          {availableVoices.length > 0 && (
-            <select
-              className="tts-voice-select"
-              value={ttsVoice || ''}
-              onChange={(e) => handleVoiceChange(e.target.value)}
-              title="选择语音"
-            >
-              {availableVoices
-                .filter(v => v.lang.startsWith('zh'))
-                .map(v => (
-                  <option key={v.name} value={v.name}>{v.name.replace(/Microsoft\s*/i,'').replace(/\(.*\)/,'').trim()}</option>
-                ))}
-              {availableVoices.some(v => !v.lang.startsWith('zh')) && (
-                <optgroup label="其他语言">
-                  {availableVoices.filter(v => !v.lang.startsWith('zh')).map(v => (
-                    <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          )}
+          {/* 语音选择器 — Edge TTS 高品质中文语音 */}
+          <select
+            className="tts-voice-select"
+            value={ttsVoice || EDGE_VOICES[0].name}
+            onChange={(e) => handleVoiceChange(e.target.value)}
+            title="选择语音"
+          >
+            {EDGE_VOICES.map(v => (
+              <option key={v.name} value={v.name}>{v.label}</option>
+            ))}
+          </select>
           {ttsState !== 'idle' && (
             <>
               <select
@@ -523,7 +516,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       >
         <div className="reader-text" key={flashId || '0'}>
           {segments.map((seg, i) => {
-            const isCurrentTTS = currentSentence >= 0 && seg.text === sentencesRef.current[currentSentence];
+            const curChunk = ttsIdxRef.current;
+            const isCurrentTTS = currentSentence >= 0 && ttsState === 'playing' && seg.text === ttsChunksRef.current[currentSentence];
             if (!seg.annotation) {
               return <span key={i} className={isCurrentTTS ? 'tts-highlight' : ''}>{seg.text}</span>;
             }
