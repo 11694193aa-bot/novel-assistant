@@ -524,23 +524,28 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
           {(() => {
             const curChunk = currentChunkText;
             const isPlaying = ttsState === 'playing' && curChunk;
-            // 把大段按句号拆成小句，逐个检查是否在当前 chunk 里
-            // [FIX-1] 精确匹配当前朗读句：小句必须等于或以 curChunk 开头/结尾
+            // [FIX-1] splitBySentence — 只高亮精确匹配当前朗读句的片段
             const splitBySentence = (text) => {
               if (!isPlaying) return [{ text, match: false }];
               const c = curChunk.trim();
-              // 小段：要求 curChunk 包含 text 且 text 长度 > 4，避免通用短片段误触发
-              if (text.length < c.length && c.includes(text.trim())) {
+
+              // 小段直接比较（text 比 curChunk 短的情况）
+              if (text.length <= c.length) {
                 const t = text.trim();
-                const match = t.length > 4 && /[一-鿿]/.test(t);
+                const match = t.length > 3 &&
+                  /[一-鿿]/.test(t) &&
+                  c.startsWith(t) &&
+                  t.length / c.length > 0.6;
                 return [{ text, match }];
               }
-              // 大段 → 拆句，每句必须和 curChunk 高度相似
+
+              // 大段 → 拆句
               const parts = text.split(/(?<=[。！？\n])/g);
               return parts.map(p => {
                 const t = p.trim();
-                const match = t.length > 0 && /[一-鿿]/.test(t) &&
-                  (t === c || c.startsWith(t) || c.endsWith(t));
+                const match = t.length > 3 &&
+                  /[一-鿿]/.test(t) &&
+                  (t === c || (c.length > 0 && t === c.replace(/[。！？]$/, '')));
                 return { text: p, match };
               });
             };

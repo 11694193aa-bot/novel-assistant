@@ -2697,13 +2697,10 @@ button.focus-float-exit,
   padding: 0 1px;
 }
 
-/* TTS 当前朗读句子高亮 */
+/* TTS 当前朗读句子高亮 — 只改文字颜色不加背景 */
 .tts-highlight {
-  background: rgba(196,122,90,.22);
-  border-radius: 4px;
-  outline: 2px solid rgba(196,122,90,.35);
-  outline-offset: 1px;
-  transition: background .3s;
+  color: #e67e22;
+  font-weight: 500;
 }
 
 /* 标注工具栏 */
