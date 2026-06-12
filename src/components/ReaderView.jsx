@@ -125,6 +125,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const sysVoicesRef = useRef([]);
   const [currentSentence, setCurrentSentence] = useState(-1);
   const [currentChunkText, setCurrentChunkText] = useState('');
+  // [FIX] 记录当前 chunk 在全文的起始偏移，用于限制高亮范围
+  const [currentChunkOffset, setCurrentChunkOffset] = useState(0);
   const progressRestored = useRef(false);
 
   useEffect(() => { progressRestored.current = false; }, [bookId]);
@@ -301,10 +303,12 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx;
     setCurrentSentence(idx);
-    // 存当前句文本用于精确标亮
+    // [FIX] 同步记录 chunk 文本和全文偏移
     setCurrentChunkText(chunks[idx]);
-    // [FIX-1] rAF 解耦滚动与朗读事件，防止同步 layout 抖动
+    // 计算当前 chunk 在全文的字符偏移
     let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
+    setCurrentChunkOffset(cc);
+    // [FIX-1] rAF 解耦滚动与朗读事件，防止同步 layout 抖动
     requestAnimationFrame(() => {
       const el = contentRef.current;
       if (el) {
@@ -330,7 +334,9 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx; setCurrentSentence(idx);
     let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
+    // [FIX] 同步记录 chunk 文本和全文偏移
     setCurrentChunkText(chunks[idx]);
+    setCurrentChunkOffset(cc);
     // [FIX-1] rAF 解耦滚动与 fetch 事件
     requestAnimationFrame(() => {
       const el = contentRef.current;
@@ -524,9 +530,14 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
           {(() => {
             const curChunk = currentChunkText;
             const isPlaying = ttsState === 'playing' && curChunk;
+            // [FIX] 只高亮当前 chunk 所在段落，防止其他段落相同句子误触发
+            const chunkStart = currentChunkOffset;
+            const chunkEnd = chunkStart + curChunk.length;
             // [FIX-1] 大段拆句后用 includes 匹配，加长度保护防误触发
-            const splitBySentence = (text) => {
+            const splitBySentence = (text, segStart, segEnd) => {
               if (!isPlaying) return [{ text, match: false }];
+              // 段和当前 chunk 无重叠 → 不高亮
+              if (segEnd <= chunkStart || segStart >= chunkEnd) return [{ text, match: false }];
               const c = curChunk.trim();
               if (!c) return [{ text, match: false }];
               const parts = text.split(/(?<=[。！？\n])/g);
@@ -544,7 +555,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
               const segStart = charPos;
               const segEnd = charPos + seg.text.length;
               charPos = segEnd;
-              const subSpans = splitBySentence(seg.text);
+              const subSpans = splitBySentence(seg.text, segStart, segEnd);
               if (!seg.annotation) {
                 return (
                   <span key={i}>
