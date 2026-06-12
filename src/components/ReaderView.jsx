@@ -219,72 +219,114 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     return () => window.removeEventListener('keydown', h);
   }, [isMobile]);
 
-  // ── TTS：朗读功能（分块预加载，消除句间间隙）───────────
-  const ttsChunkIdxRef = useRef(0);
+  // ── TTS：健壮朗读引擎 ──────────────────────────────────
+  const ttsIdxRef = useRef(0);
   const ttsChunksRef = useRef([]);
+  const ttsWatchdogRef = useRef(null);
+  const ttsKeepAliveRef = useRef(null);
+  const ttsLastStartRef = useRef(0);
 
-  // 把文本按 ~200 字分块
-  const buildChunks = useCallback((text) => {
-    const raw = splitSentences(text);
+  // 清除所有 TTS 定时器
+  const clearTTSTimers = useCallback(() => {
+    clearTimeout(ttsWatchdogRef.current);
+    clearInterval(ttsKeepAliveRef.current);
+  }, []);
+
+  // 停止朗读
+  const stopTTS = useCallback(() => {
+    clearTTSTimers();
+    window.speechSynthesis?.cancel();
+    isSpeakingRef.current = false;
+    setTtsState('idle');
+    setCurrentSentence(-1);
+  }, [clearTTSTimers]);
+
+  // 播放指定块
+  const speakChunk = useCallback((idx) => {
+    const chunks = ttsChunksRef.current;
+    if (idx >= chunks.length) { stopTTS(); return; }
+
+    const synth = window.speechSynthesis;
+    ttsIdxRef.current = idx;
+    const utter = new SpeechSynthesisUtterance(chunks[idx]);
+    utter.lang = 'zh-CN';
+    utter.rate = ttsSpeed;
+    utter.volume = 1.0;
+
+    const voices = synth.getVoices();
+    const picked = voices.find(v => v.name === ttsVoiceRef.current);
+    const zhVoice = picked || voices.find(v => v.lang.startsWith('zh'));
+    if (zhVoice) utter.voice = zhVoice;
+
+    utter.onstart = () => {
+      ttsLastStartRef.current = Date.now();
+      setCurrentSentence(idx);
+      // 滚动跟随
+      let cc = 0;
+      for (let j = 0; j < idx; j++) cc += chunks[j].length;
+      const total = chunks.reduce((s, t) => s + t.length, 0);
+      const el = contentRef.current;
+      if (el) el.scrollTop = (cc / (total || 1)) * (el.scrollHeight - el.clientHeight);
+    };
+
+    utter.onend = () => {
+      if (isSpeakingRef.current) speakChunk(idx + 1);
+    };
+
+    utter.onerror = (e) => {
+      // Chrome 偶尔报错但实际在播，忽略；如果确实停了 watchdog 会兜底
+      if (e.error === 'canceled' || e.error === 'interrupted') return;
+      if (isSpeakingRef.current) speakChunk(idx + 1);
+    };
+
+    // 看门狗：如果 15 秒没听到 onstart，说明卡死了，重启
+    clearTimeout(ttsWatchdogRef.current);
+    ttsWatchdogRef.current = setTimeout(() => {
+      if (!isSpeakingRef.current) return;
+      const elapsed = Date.now() - ttsLastStartRef.current;
+      if (elapsed > 12000) {
+        // 卡死了 → cancel 后从当前位置重启
+        synth.cancel();
+        setTimeout(() => { if (isSpeakingRef.current) speakChunk(ttsIdxRef.current); }, 200);
+      }
+    }, 15000);
+
+    synth.speak(utter);
+  }, [ttsSpeed, stopTTS]);
+
+  // 开始/继续朗读
+  const startTTS = useCallback(() => {
+    if (!book?.content) return;
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    clearTTSTimers();
+
     const chunks = [];
+    const raw = splitSentences(book.content);
     let buf = '';
     for (const s of raw) {
       buf += s;
-      if (buf.length >= 200) { chunks.push(buf); buf = ''; }
+      if (buf.length >= 300) { chunks.push(buf); buf = ''; }
     }
     if (buf.trim()) chunks.push(buf);
-    return chunks;
-  }, []);
+    ttsChunksRef.current = chunks;
 
-  const queueChunks = useCallback((fromIdx) => {
-    const chunks = ttsChunksRef.current;
-    const synth = window.speechSynthesis;
-    // 一次队列最多放 3 块，避免溢出
-    const end = Math.min(fromIdx + 3, chunks.length);
-    for (let i = fromIdx; i < end; i++) {
-      const utter = new SpeechSynthesisUtterance(chunks[i]);
-      utter.lang = 'zh-CN';
-      utter.rate = ttsSpeed;
-      utter.volume = 0.9;
-      const voices = synth.getVoices();
-      const picked = voices.find(v => v.name === ttsVoiceRef.current);
-      const zhVoice = picked || voices.find(v => v.lang.startsWith('zh')) || voices[0];
-      if (zhVoice) utter.voice = zhVoice;
+    isSpeakingRef.current = true;
+    setTtsState('playing');
 
-      utter.onstart = () => {
-        ttsChunkIdxRef.current = i;
-        setCurrentSentence(i);
-        // 滚动跟随
-        let cc = 0;
-        for (let j = 0; j < i; j++) cc += chunks[j].length;
-        const total = chunks.reduce((s, t) => s + t.length, 0);
-        const el = contentRef.current;
-        if (el) el.scrollTop = (cc / (total || 1)) * (el.scrollHeight - el.clientHeight);
-      };
+    // Chrome 保活：每 8 秒 resume 一次防止浏览器杀掉语音
+    ttsKeepAliveRef.current = setInterval(() => {
+      if (isSpeakingRef.current && synth.paused) synth.resume();
+    }, 8000);
 
-      utter.onend = () => {
-        const next = ttsChunkIdxRef.current + 1;
-        if (next >= chunks.length) {
-          if (isSpeakingRef.current) {
-            setTtsState('idle');
-            setCurrentSentence(-1);
-            isSpeakingRef.current = false;
-          }
-          return;
-        }
-        // 队列快空了就补
-        const remaining = chunks.length - next;
-        if (remaining <= 2 && isSpeakingRef.current) {
-          queueChunks(next);
-        }
-      };
-
-      utter.onerror = () => {
-        // 忽略，onend 会处理
-      };
-      synth.speak(utter);
+    // 等 voices 就绪
+    const doStart = () => speakChunk(ttsIdxRef.current || 0);
+    if (synth.getVoices().length === 0) {
+      synth.addEventListener('voiceschanged', doStart, { once: true });
+    } else {
+      doStart();
     }
-  }, [ttsSpeed]);
+  }, [book?.content, clearTTSTimers, speakChunk]);
 
   const handleTTS = useCallback(() => {
     const synth = window.speechSynthesis;
@@ -292,39 +334,50 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
     if (ttsState === 'playing') {
       synth.pause();
+      clearTTSTimers();
       setTtsState('paused');
       isSpeakingRef.current = false;
     } else if (ttsState === 'paused') {
       synth.resume();
-      setTtsState('playing');
       isSpeakingRef.current = true;
+      setTtsState('playing');
+      // 重启看门狗
+      ttsWatchdogRef.current = setTimeout(() => {
+        if (!isSpeakingRef.current) return;
+        if (Date.now() - ttsLastStartRef.current > 12000) {
+          synth.cancel();
+          setTimeout(() => { if (isSpeakingRef.current) speakChunk(ttsIdxRef.current); }, 200);
+        }
+      }, 15000);
     } else {
-      if (!book?.content) return;
-      synth.cancel();
-      const chunks = buildChunks(book.content);
-      ttsChunksRef.current = chunks;
-      ttsChunkIdxRef.current = 0;
-      isSpeakingRef.current = true;
-      setTtsState('playing');
-      if (synth.getVoices().length === 0) {
-        synth.addEventListener('voiceschanged', () => queueChunks(0), { once: true });
-      } else {
-        queueChunks(0);
-      }
+      ttsIdxRef.current = 0;
+      startTTS();
     }
-  }, [ttsState, book?.content, buildChunks, queueChunks]);
+  }, [ttsState, startTTS, clearTTSTimers, speakChunk]);
 
   const handleTTSStop = useCallback(() => {
-    window.speechSynthesis.cancel();
-    setTtsState('idle');
-    setCurrentSentence(-1);
-    isSpeakingRef.current = false;
-  }, []);
+    stopTTS();
+  }, [stopTTS]);
 
-  // cleanup on unmount
+  // 语音切换时如果正在播放，自动用新语音重读当前块
+  const prevVoiceRef = useRef(ttsVoice);
   useEffect(() => {
-    return () => { window.speechSynthesis?.cancel(); };
-  }, []);
+    if (!isSpeakingRef.current) { prevVoiceRef.current = ttsVoice; return; }
+    if (ttsVoice !== prevVoiceRef.current) {
+      prevVoiceRef.current = ttsVoice;
+      // 取消当前队列，从当前位置用新语音重启
+      window.speechSynthesis.cancel();
+      setTimeout(() => { if (isSpeakingRef.current) speakChunk(ttsIdxRef.current); }, 150);
+    }
+  }, [ttsVoice, speakChunk]);
+
+  // 卸载时清理
+  useEffect(() => {
+    return () => {
+      clearTTSTimers();
+      window.speechSynthesis?.cancel();
+    };
+  }, [clearTTSTimers]);
 
   // ── 确认标注 ──
   const handleConfirmAnnotation = () => {
