@@ -295,9 +295,10 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     setCurrentSentence(idx);
     // 存当前句文本用于精确标亮
     currentChunkTextRef.current = chunks[idx];
-    // 平滑滚动
+    // 滚动
     const el = contentRef.current;
     if (el) {
+      let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
       const total = chunks.reduce((s,t)=>s+t.length,0)||1;
       el.scrollTop = (cc / total) * (el.scrollHeight - el.clientHeight);
     }
