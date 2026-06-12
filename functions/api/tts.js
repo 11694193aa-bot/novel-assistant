@@ -27,10 +27,8 @@ async function tryEdgeTTS(text, rate) {
 
 // ── Google TTS ───────────────────────────────────────────
 async function tryGoogleTTS(text, rate) {
-  // Google 单次限制约 200 字
   const t = text.slice(0, 450);
-  const speed = Math.round((rate || 1) * 1); // Google speed: 0.5-2, default 1
-  const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(t)}&tl=zh-CN&client=tw-ob&ttsspeed=${speed}`;
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(t)}&tl=zh-CN&client=tw-ob`;
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
   });
@@ -56,7 +54,7 @@ export async function onRequest({ request }) {
     try {
       buf = await tryEdgeTTS(text.trim(), rate || 1);
     } catch (e1) {
-      console.log('Edge failed, try Google:', e1.message);
+      console.log('Edge failed:', e1.message);
       try {
         buf = await tryGoogleTTS(text.trim(), rate || 1);
       } catch (e2) {
