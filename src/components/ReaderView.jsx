@@ -127,6 +127,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [currentChunkText, setCurrentChunkText] = useState('');
   // [FIX] 记录当前 chunk 在全文的起始偏移，用于限制高亮范围
   const [currentChunkOffset, setCurrentChunkOffset] = useState(0);
+  // [FIX] onboundary 追踪的当前句全文偏移范围
+  const [highlightRange, setHighlightRange] = useState({ start: 0, end: 0 });
   const progressRestored = useRef(false);
 
   useEffect(() => { progressRestored.current = false; }, [bookId]);
@@ -294,32 +296,63 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     window.speechSynthesis?.cancel();
     setTtsState('idle');
     setCurrentSentence(-1);
+    setHighlightRange({ start: 0, end: 0 });
   }, [stopAutoScroll]);
 
-  // ── 桌面端：逐句朗读（每句一个 utterance）──
-  const speakLocal = useCallback((sentences, idx, curGen) => {
-    if (ttsGenRef.current !== curGen) return;
-    if (idx >= sentences.length || !isSpeakingRef.current) { stopTTS(); return; }
+  // ── 桌面端：chunk 朗读 + onboundary 逐句追踪 ──
+  const speakLocal = useCallback((idx, gen) => {
+    if (gen !== undefined && gen !== ttsGenRef.current) return;
+    const chunks = ttsChunksRef.current;
+    if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx;
-    const sentence = sentences[idx];
+    const chunk = chunks[idx];
     setCurrentSentence(idx);
-    // [FIX] 逐句：currentChunkText 就是单句（~20字），偏移按句子累加
-    setCurrentChunkText(sentence);
-    let offset = 0;
-    for (let j = 0; j < idx; j++) offset += sentences[j].length;
-    setCurrentChunkOffset(offset);
-    // [FIX-1] rAF 滚动到当前高亮句
-    requestAnimationFrame(() => {
-      const el = document.querySelector('.tts-highlight');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
+    setCurrentChunkText(chunk);
 
-    const u = new SpeechSynthesisUtterance(sentence);
+    // 计算当前 chunk 在全文的起始偏移
+    let chunkStart = 0;
+    for (let j = 0; j < idx; j++) chunkStart += chunks[j].length;
+    setCurrentChunkOffset(chunkStart);
+
+    // [FIX] onboundary 降级标记：2秒内未触发则高亮整个 chunk
+    let boundaryFired = false;
+    const fallbackTimer = setTimeout(() => {
+      if (!boundaryFired) {
+        setHighlightRange({ start: chunkStart, end: chunkStart + chunk.length });
+      }
+    }, 2000);
+
+    const curGen = ttsGenRef.current;
+    const u = new SpeechSynthesisUtterance(chunk);
     u.lang = 'zh-CN'; u.rate = ttsSpeed; u.volume = 1;
     const v = sysVoicesRef.current.find(v => v.name === ttsVoiceRef.current) || sysVoicesRef.current[0];
     if (v) u.voice = v;
-    u.onend = () => { if (isSpeakingRef.current && ttsGenRef.current === curGen) speakLocal(sentences, idx + 1, curGen); };
-    u.onerror = (e) => { if (e.error !== 'interrupted' && isSpeakingRef.current && ttsGenRef.current === curGen) speakLocal(sentences, idx + 1, curGen); };
+
+    // [FIX] onboundary：每次读到新词时触发，精确定位当前句
+    u.onboundary = (e) => {
+      if (e.name !== 'word' && e.name !== 'sentence') return;
+      boundaryFired = true;
+      clearTimeout(fallbackTimer);
+      const ci = e.charIndex;
+      // 往前找最近句号 → 当前句起始
+      let s = 0;
+      for (let i = ci - 1; i >= 0; i--) {
+        if (/[。！？\n]/.test(chunk[i])) { s = i + 1; break; }
+      }
+      // 往后找最近句号 → 当前句结束
+      let e2 = chunk.length;
+      for (let i = ci; i < chunk.length; i++) {
+        if (/[。！？\n]/.test(chunk[i])) { e2 = i + 1; break; }
+      }
+      setHighlightRange({ start: chunkStart + s, end: chunkStart + e2 });
+      requestAnimationFrame(() => {
+        const el = document.querySelector('.tts-highlight');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    };
+
+    u.onend = () => { clearTimeout(fallbackTimer); if (isSpeakingRef.current && ttsGenRef.current === curGen) speakLocal(idx + 1, curGen); };
+    u.onerror = (e) => { clearTimeout(fallbackTimer); if (e.error !== 'interrupted' && isSpeakingRef.current && ttsGenRef.current === curGen) speakLocal(idx + 1, curGen); };
     window.speechSynthesis.speak(u);
   }, [ttsSpeed, stopTTS]);
 
@@ -361,29 +394,19 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const startTTS = useCallback((fromIdx = 0) => {
     if (!book?.content) return;
     stopTTS();
-    const raw = splitSentences(book.content);
-    // [FIX] 桌面端用单句数组逐句播放，手机端仍拼 chunk
-    if (isMobile) {
-      const chunks = [];
-      let buf = '';
-      for (const s of raw) { buf += s; if (buf.length >= 180) { chunks.push(buf); buf = ''; } }
-      if (buf.trim()) chunks.push(buf);
-      ttsChunksRef.current = chunks;
-    } else {
-      ttsChunksRef.current = raw;
-    }
+    const chunks = [], raw = splitSentences(book.content);
+    let buf = '';
+    const limit = isMobile ? 180 : 300;
+    for (const s of raw) { buf += s; if (buf.length >= limit) { chunks.push(buf); buf = ''; } }
+    if (buf.trim()) chunks.push(buf);
+    ttsChunksRef.current = chunks;
     isSpeakingRef.current = true;
     setTtsState('playing');
-    const gen = ttsGenRef.current;
     // [FIX-1] rAF 确保 DOM 分句渲染完毕后再开始朗读
+    const gen = ttsGenRef.current;
+    const fn = isMobile ? playCloud : speakLocal;
     requestAnimationFrame(() => {
-      if (isMobile) {
-        const chunks = ttsChunksRef.current;
-        playCloud(Math.min(fromIdx, chunks.length - 1), gen);
-      } else {
-        const sentences = ttsChunksRef.current;
-        speakLocal(sentences, Math.min(fromIdx, sentences.length - 1), gen);
-      }
+      fn(Math.min(fromIdx, chunks.length - 1), gen);
     });
   }, [book?.content, stopTTS, isMobile, speakLocal, playCloud]);
 
@@ -533,23 +556,20 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
           {(() => {
             const curChunk = currentChunkText;
             const isPlaying = ttsState === 'playing' && curChunk;
-            // [FIX] 只高亮当前 chunk 所在段落，防止其他段落相同句子误触发
-            const chunkStart = currentChunkOffset;
-            const chunkEnd = chunkStart + curChunk.length;
-            // [FIX-1] 大段拆句后用 includes 匹配，加长度保护防误触发
+            // [FIX] 用 onboundary 的 highlightRange 精准定位当前句
+            const { start: hlStart, end: hlEnd } = highlightRange;
             const splitBySentence = (text, segStart, segEnd) => {
-              if (!isPlaying) return [{ text, match: false }];
-              // 段和当前 chunk 无重叠 → 不高亮
-              if (segEnd <= chunkStart || segStart >= chunkEnd) return [{ text, match: false }];
-              const c = curChunk.trim();
-              if (!c) return [{ text, match: false }];
+              if (!isPlaying || hlEnd <= hlStart) return [{ text, match: false }];
+              // 段和高亮范围无重叠
+              if (segEnd <= hlStart || segStart >= hlEnd) return [{ text, match: false }];
+              // 拆句，每句和高亮范围有重叠即匹配
               const parts = text.split(/(?<=[。！？\n])/g);
+              let cursor = segStart;
               return parts.map(p => {
-                const t = p.trim();
-                const match =
-                  t.length > 4 &&
-                  /[一-鿿]/.test(t) &&
-                  c.includes(t);
+                const s = cursor;
+                const e = cursor + p.length;
+                cursor = e;
+                const match = s < hlEnd && e > hlStart && p.trim().length > 4 && /[一-鿿]/.test(p);
                 return { text: p, match };
               });
             };
