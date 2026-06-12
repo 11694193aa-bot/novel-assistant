@@ -247,30 +247,30 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
   }, [isMobile]);
 
+  // ── 平滑滚动到指定比例 ──
+  const scrollTargetRef = useRef(0);
   const stopAutoScroll = useCallback(() => {
     if (scrollRAF.current) { cancelAnimationFrame(scrollRAF.current); scrollRAF.current = null; }
   }, []);
 
-  const startAutoScroll = useCallback(() => {
-    stopAutoScroll();
-    if (!contentRef.current || !book?.content) return;
+  const scrollToRatio = useCallback((ratio) => {
     const el = contentRef.current;
-    const totalH = el.scrollHeight - el.clientHeight;
-    if (totalH <= 0) return;
-    // 估算每字朗读时间 ~250ms（default rate=1），按 ttsSpeed 缩放
-    const msPerChar = 250 / (ttsSpeedRef.current || 1);
-    const totalMs = (book.content.length || 1) * msPerChar;
-    const pxPerMs = totalH / totalMs;
-    let last = performance.now();
+    if (!el) return;
+    const target = Math.max(0, ratio * (el.scrollHeight - el.clientHeight));
+    const start = el.scrollTop;
+    if (Math.abs(target - start) < 10) return; // 已经接近
+    scrollTargetRef.current = target;
+    if (scrollRAF.current) return; // 上一次动画还在跑，会追上新的 target
+    const startTime = performance.now();
     const tick = (now) => {
-      if (!isSpeakingRef.current) return;
-      const dt = now - last;
-      last = now;
-      el.scrollTop += pxPerMs * dt;
-      scrollRAF.current = requestAnimationFrame(tick);
+      const p = Math.min((now - startTime) / 400, 1); // 400ms 缓动
+      const eased = 1 - Math.pow(1 - p, 3); // ease-out
+      el.scrollTop = start + (scrollTargetRef.current - start) * eased;
+      if (p < 1) { scrollRAF.current = requestAnimationFrame(tick); }
+      else { scrollRAF.current = null; }
     };
     scrollRAF.current = requestAnimationFrame(tick);
-  }, [book?.content, stopAutoScroll]);
+  }, []);
 
   const stopTTS = useCallback(() => {
     isSpeakingRef.current = false;
@@ -291,6 +291,9 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx;
     setCurrentSentence(idx);
+    // 平滑滚动到当前段
+    let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
+    scrollToRatio(cc / (chunks.reduce((s,t)=>s+t.length,0)||1));
 
     const curGen = ttsGenRef.current;
     const u = new SpeechSynthesisUtterance(chunks[idx]);
@@ -308,6 +311,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     const chunks = ttsChunksRef.current;
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx; setCurrentSentence(idx);
+    let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
+    scrollToRatio(cc / (chunks.reduce((s,t)=>s+t.length,0)||1));
 
     const abort = new AbortController(); ttsAbortRef.current = abort;
     const curGen = ttsGenRef.current;
@@ -339,11 +344,10 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     ttsChunksRef.current = chunks;
     isSpeakingRef.current = true;
     setTtsState('playing');
-    startAutoScroll();
     const gen = ttsGenRef.current;
     const fn = isMobile ? playCloud : speakLocal;
     fn(Math.min(fromIdx, chunks.length - 1), gen);
-  }, [book?.content, stopTTS, isMobile, speakLocal, playCloud, startAutoScroll]);
+  }, [book?.content, stopTTS, isMobile, speakLocal, playCloud]);
 
   const handleTTS = useCallback(() => {
     if (ttsState === 'playing') {
@@ -353,11 +357,10 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       setTtsState('paused');
     } else if (ttsState === 'paused') {
       isSpeakingRef.current = true; setTtsState('playing');
-      startAutoScroll();
       if (isMobile) ttsAudioRef.current?.play().catch(()=>{});
       else window.speechSynthesis?.resume();
     } else startTTS(0);
-  }, [ttsState, startTTS, isMobile, stopAutoScroll, startAutoScroll]);
+  }, [ttsState, startTTS, isMobile, stopAutoScroll]);
 
   const handleTTSStop = useCallback(() => stopTTS(), [stopTTS]);
 

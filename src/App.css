@@ -2699,8 +2699,10 @@ button.focus-float-exit,
 
 /* TTS 当前朗读句子高亮 */
 .tts-highlight {
-  background: rgba(196,122,90,.15);
+  background: rgba(196,122,90,.22);
   border-radius: 4px;
+  outline: 2px solid rgba(196,122,90,.35);
+  outline-offset: 1px;
   transition: background .3s;
 }
 
