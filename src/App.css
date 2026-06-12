@@ -2643,6 +2643,8 @@ button.focus-float-exit,
   flex: 1; overflow-y: auto; overflow-x: hidden;
   padding: 28px 24px; -webkit-overflow-scrolling: touch;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;        /* 屏蔽 iOS 搜索弹窗 */
+  touch-action: pan-y;                 /* 允许垂直滚动，保留长按选字 */
 }
 /* 清除浏览器默认蓝色选中背景，只显示字体 */
 .reader-content ::selection {

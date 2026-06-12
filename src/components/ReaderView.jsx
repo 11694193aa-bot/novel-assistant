@@ -469,8 +469,6 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         ref={(el) => { contentRef.current = el; restoreReadingProgress(el); }}
         className="reader-content"
         onScroll={saveProgress}
-        onContextMenu={(e) => e.preventDefault()}
-        onTouchStart={(e) => { if (e.touches.length > 1) e.preventDefault(); }}
       >
         <div className="reader-text" key={flashId || '0'}>
           {segments.map((seg, i) => {
