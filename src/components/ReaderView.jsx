@@ -122,7 +122,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [sysVoices, setSysVoices] = useState([]);
   const sysVoicesRef = useRef([]);
   const [currentSentence, setCurrentSentence] = useState(-1);
-  const currentChunkTextRef = useRef('');
+  const [currentChunkText, setCurrentChunkText] = useState('');
   const progressRestored = useRef(false);
 
   useEffect(() => { progressRestored.current = false; }, [bookId]);
@@ -294,7 +294,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     ttsIdxRef.current = idx;
     setCurrentSentence(idx);
     // 存当前句文本用于精确标亮
-    currentChunkTextRef.current = chunks[idx];
+    setCurrentChunkText(chunks[idx]);
     // 滚动
     const el = contentRef.current;
     if (el) {
@@ -320,7 +320,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx; setCurrentSentence(idx);
     let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
-    currentChunkTextRef.current = chunks[idx];
+    setCurrentChunkText(chunks[idx]);
     const el = contentRef.current;
     if (el) {
       const total = chunks.reduce((s,t)=>s+t.length,0)||1;
@@ -505,9 +505,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
               const segStart = charPos;
               const segEnd = charPos + seg.text.length;
               charPos = segEnd;
-              // 只有当前句文本包含此段时才标亮（排除大段包含当前句的情况）
-              // 不含中文的段（换行/空格/标点）不标亮
-              const curText = currentChunkTextRef.current;
+              // 用 state 而非 ref，保证渲染时文本一定匹配当前实际播放句
+              const curText = currentChunkText;
               const hasChinese = /[一-鿿]/.test(seg.text);
               const isCurrentTTS = ttsState === 'playing' && curText && hasChinese &&
                 seg.text.length < curText.length && curText.includes(seg.text);
