@@ -33,6 +33,7 @@ const useStore = create((set, get) => ({
   settings: { ...defaultSettings },
   dailyCounts: {},
   trash: [],
+  readingBooks: [],
   dirty: false,
   initialized: false,
   toast: null,          // { text: string, ts: number }  — 全局提示弹窗
@@ -51,6 +52,7 @@ const useStore = create((set, get) => ({
         settings: { ...defaultSettings, ...(data.settings || {}), splashImage },
         dailyCounts: data.dailyCounts || {},
         trash: data.trash || [],
+        readingBooks: data.readingBooks || [],
         initialized: true,
         toast: fromCloud ? { text: '已从云端同步数据', ts: Date.now() } : null,
       });
@@ -62,9 +64,9 @@ const useStore = create((set, get) => ({
   // ============ 持久化 ============
   persist: async (silent = false) => {
     if (!silent) set({ toast: { text: '正在保存...', ts: Date.now() } });
-    const { books, inspirationCards, aiConversations, settings, dailyCounts, trash } = get();
+    const { books, inspirationCards, aiConversations, settings, dailyCounts, trash, readingBooks } = get();
     const { splashImage, ...settingsWithoutSplash } = settings;
-    const data = { books, inspirationCards, aiConversations, settings: settingsWithoutSplash, dailyCounts, trash };
+    const data = { books, inspirationCards, aiConversations, settings: settingsWithoutSplash, dailyCounts, trash, readingBooks };
     // 先写本地 IndexedDB（saveData 内部），再立即云同步（不等 15 秒防抖）
     await saveData(SAVE_KEY, data);
     // splashImage 独立存储（不进主数据同步流）
@@ -115,6 +117,8 @@ const useStore = create((set, get) => ({
       set(s => ({ inspirationCards: [...s.inspirationCards, item], trash: s.trash.filter(t => t.id !== trashId), dirty: true }));
     } else if (type === 'mindMapCard') {
       set(s => ({ books: s.books.map(b => b.id === bookId ? { ...b, mindMapCards: [...(b.mindMapCards || []), item] } : b), trash: s.trash.filter(t => t.id !== trashId), dirty: true }));
+    } else if (type === 'readingBook') {
+      set(s => ({ readingBooks: [...s.readingBooks, item], trash: s.trash.filter(t => t.id !== trashId), dirty: true }));
     }
   },
 
@@ -512,6 +516,87 @@ const useStore = create((set, get) => ({
       gachaQuestion: '',
     };
     return get().addInspirationCard(card);
+  },
+
+  // ============ 阅读书籍操作 ============
+  addReadingBook: (bookData) => {
+    const book = {
+      id: uid(),
+      title: bookData.title || '未命名书籍',
+      author: bookData.author || '',
+      content: bookData.content || '',
+      annotations: [],
+      sourceFormat: bookData.sourceFormat || 'txt',
+      sourceFileName: bookData.sourceFileName || '',
+      cover: bookData.cover || null,
+      createdAt: Date.now(),
+      totalChars: (bookData.content || '').replace(/\s/g, '').length,
+      readingProgress: 0,
+    };
+    set(s => ({ readingBooks: [...s.readingBooks, book], dirty: true }));
+    return book;
+  },
+
+  deleteReadingBook: (id) => {
+    const book = get().readingBooks.find(b => b.id === id);
+    if (book) get().moveToTrash('readingBook', book, null);
+    set(s => ({
+      readingBooks: s.readingBooks.filter(b => b.id !== id),
+      dirty: true,
+    }));
+  },
+
+  renameReadingBook: (id, title) => {
+    set(s => ({
+      readingBooks: s.readingBooks.map(b => b.id === id ? { ...b, title } : b),
+      dirty: true,
+    }));
+  },
+
+  setReadingBookCover: (id, coverDataUrl) => {
+    set(s => ({
+      readingBooks: s.readingBooks.map(b => b.id === id ? { ...b, cover: coverDataUrl } : b),
+      dirty: true,
+    }));
+  },
+
+  addAnnotation: (bookId, annotation) => {
+    const ann = { id: uid(), ...annotation, createdAt: Date.now() };
+    set(s => ({
+      readingBooks: s.readingBooks.map(b => b.id === bookId
+        ? { ...b, annotations: [...(b.annotations || []), ann] }
+        : b),
+      dirty: true,
+    }));
+    return ann;
+  },
+
+  removeAnnotation: (bookId, annotationId) => {
+    set(s => ({
+      readingBooks: s.readingBooks.map(b => b.id === bookId
+        ? { ...b, annotations: (b.annotations || []).filter(a => a.id !== annotationId) }
+        : b),
+      dirty: true,
+    }));
+  },
+
+  updateAnnotation: (bookId, annotationId, updates) => {
+    set(s => ({
+      readingBooks: s.readingBooks.map(b => b.id === bookId
+        ? { ...b, annotations: (b.annotations || []).map(a =>
+            a.id === annotationId ? { ...a, ...updates } : a) }
+        : b),
+      dirty: true,
+    }));
+  },
+
+  updateReadingProgress: (bookId, offset) => {
+    set(s => ({
+      readingBooks: s.readingBooks.map(b => b.id === bookId
+        ? { ...b, readingProgress: offset }
+        : b),
+      dirty: true,
+    }));
   },
 }));
 

@@ -4,6 +4,8 @@ import NavBar from './components/NavBar';
 import DirectoryView from './components/DirectoryView';
 import MobileStack from './components/MobileStack';
 import MobileFullPage from './components/MobileFullPage';
+import ReadingBookList from './components/ReadingBookList';
+import ReaderView from './components/ReaderView';
 import { spawnPaw } from './components/Icon';
 import { loadSplash } from './utils/storage';
 
@@ -75,6 +77,7 @@ export default function App() {
   const [mindmapDrillId, setMindmapDrillId] = useState(null);
   const [inspDrillId, setInspDrillId] = useState(null);
   const [inspCount, setInspCount] = useState(0);
+  const [readerBookId, setReaderBookId] = useState(null);
 
   const selectedChapter = useMemo(() => {
     if (!selectedChapterId || !selectedBookId) return null;
@@ -287,6 +290,19 @@ export default function App() {
           </MobileFullPage>
         )}
 
+        {/* 阅读全屏页 */}
+        {activeTab === 'reading' && !readerBookId && (
+          <MobileFullPage title="阅读" onBack={() => navigateTab('directory')}
+            actions={<button className="tb-btn" onClick={() => document.querySelector('.rbl-import-btn')?.click()} style={{fontSize:13,fontWeight:700}}>📥 导入</button>}>
+            <ReadingBookList isMobile onOpenReader={(id) => setReaderBookId(id)} />
+          </MobileFullPage>
+        )}
+
+        {/* 阅读器全屏覆盖层（手机端） */}
+        {activeTab === 'reading' && readerBookId && (
+          <ReaderView bookId={readerBookId} onBack={() => setReaderBookId(null)} isMobile />
+        )}
+
         {/* 弹窗 */}
         <Suspense fallback={null}>
           {gachaOpen && <GachaMachine books={books} onClose={() => setGachaOpen(false)} />}
@@ -326,6 +342,13 @@ export default function App() {
           {activeTab === 'aichat' && <AIChatView chapterContent={selectedChapter?.content || null}
             chapterTitle={selectedChapter?.title || null} />}
           {activeTab === 'history' && <DiffViewer books={books} inspirationCards={inspirationCards} />}
+          {activeTab === 'reading' && (
+            readerBookId ? (
+              <ReaderView bookId={readerBookId} onBack={() => setReaderBookId(null)} />
+            ) : (
+              <ReadingBookList onOpenReader={(id) => setReaderBookId(id)} />
+            )
+          )}
         </Suspense>
       </div>
 

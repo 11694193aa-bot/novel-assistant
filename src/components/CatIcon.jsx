@@ -258,6 +258,15 @@ const icons = {
       <rect x="3" y="5" width="14" height="17" rx="2" strokeWidth="0.8" opacity="0.4" />
     </g>
   ),
+
+  // ── 阅读：打开的书本 ──
+  reading: (
+    <g stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <path d="M4 6 Q4 4 6 4 L11.5 6 L12 6.5 L12.5 6 L12 6 L12 20 L12 20.5 L11.5 20 L6 18 Q4 18 4 20 Z" />
+      <path d="M20 6 Q20 4 18 4 L12.5 6 L12 6.5 L12 6 L12 20 L12.5 20 L18 18 Q20 18 20 20 Z" />
+      <line x1="12" y1="6" x2="12" y2="20" />
+    </g>
+  ),
 };
 
 const ICON_NAMES = Object.keys(icons);

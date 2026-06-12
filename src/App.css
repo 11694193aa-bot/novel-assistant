@@ -2423,11 +2423,297 @@ button.focus-exit-btn,
 button.focus-float-exit,
 .extract-actions button,
 .float-actions button,
-.webdav-actions button {
+.webdav-actions button,
+.reading-action-btn,
+.ann-color-btn,
+.ann-style-btn,
+.ann-confirm-btn,
+.ann-cancel-btn,
+.rbl-import-btn {
   border: 0 none !important;
   outline: 0 none !important;
   box-shadow: none !important;
   -webkit-appearance: none !important;
   appearance: none !important;
+}
+
+/* ================================================================
+   阅读书房 — 书单
+   ================================================================ */
+
+.reading-book-list {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--bg);
+}
+
+.rbl-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; background: var(--card);
+  position: sticky; top: 0; z-index: 10; flex-shrink: 0;
+  box-shadow: var(--shadow);
+}
+.rbl-title {
+  flex: 1; font-size: 17px; font-weight: 800;
+  display: flex; align-items: center; gap: 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rbl-import-btn {
+  padding: 10px 18px; border-radius: 16px;
+  background: linear-gradient(135deg, var(--pink), var(--pink2));
+  color: #fff; font-family: inherit; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: .15s; white-space: nowrap;
+}
+.rbl-import-btn:hover { transform: scale(1.04); box-shadow: var(--shadow2); }
+.rbl-import-btn:active { transform: scale(.96); }
+.rbl-import-btn:disabled { opacity: .5; cursor: default; }
+
+.reading-empty {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px; color: var(--text3); padding: 40px;
+}
+.reading-empty-hint {
+  font-size: 13px; opacity: .7;
+}
+
+/* 书卡片（匹配 ms-book-card 风格） */
+.reading-book-grid {
+  flex: 1; overflow-y: auto; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.reading-book-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 18px; background: var(--card);
+  border-radius: 16px; cursor: pointer; transition: .15s;
+  user-select: none; position: relative;
+  box-shadow: var(--shadow);
+}
+.reading-book-card:hover { box-shadow: var(--shadow2); }
+.reading-book-card:active { transform: scale(.98); background: var(--hover); }
+
+.reading-book-cover {
+  width: 52px; height: 68px; flex-shrink: 0;
+  border-radius: 10px; overflow: hidden;
+  background: var(--bg2); display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow);
+}
+.reading-book-cover img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.reading-book-cover-icon {
+  color: var(--text3); opacity: .5;
+}
+
+.reading-book-info { flex: 1; min-width: 0; }
+.reading-book-title {
+  font-size: 15px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.reading-book-author {
+  font-size: 12px; color: var(--text3); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.reading-book-meta {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--text3); margin-top: 5px; flex-wrap: wrap;
+}
+.reading-book-badge {
+  font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 8px;
+  background: var(--pink3); color: var(--pink);
+}
+.reading-inline-edit {
+  flex: 1; padding: 4px 8px; border-radius: 12px;
+  font-family: inherit; font-size: 14px; font-weight: 600; outline: none;
+  box-shadow: var(--shadow);
+}
+
+/* 阅读进度条 */
+.reading-progress-bar {
+  margin-top: 6px; height: 3px; border-radius: 6px;
+  background: var(--bg2); overflow: hidden;
+}
+.reading-progress-fill {
+  height: 100%; border-radius: 6px;
+  background: linear-gradient(90deg, var(--pink2), var(--pink));
+  transition: width .3s;
+}
+
+.reading-book-actions {
+  flex-shrink: 0; opacity: 0; transition: .12s;
+}
+.reading-book-card:hover .reading-book-actions { opacity: 1; }
+.reading-action-btn {
+  padding: 5px 10px; border-radius: 12px;
+  background: var(--bg); cursor: pointer; font-size: 14px;
+  font-family: inherit; transition: .12s;
+}
+.reading-action-btn:hover { background: #ff6b6b; color: #fff; }
+
+/* ================================================================
+   阅读器
+   ================================================================ */
+
+.reader-container {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--card); position: relative;
+}
+.reader-container.reader-mobile {
+  position: fixed; inset: 0; z-index: 100;
+}
+
+/* 极简顶栏 */
+.reader-topbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; background: var(--card);
+  flex-shrink: 0; z-index: 10;
+  box-shadow: var(--shadow);
+}
+.reader-back-btn {
+  border: none; background: none; cursor: pointer;
+  font-family: inherit; font-size: 14px; font-weight: 700;
+  color: var(--pink); padding: 6px 10px; border-radius: 12px;
+  transition: .12s; flex-shrink: 0; white-space: nowrap;
+}
+.reader-back-btn:hover { background: var(--pink3); }
+.reader-title {
+  flex: 1; font-size: 14px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: center;
+}
+.reader-progress {
+  font-size: 11px; color: var(--text3); flex-shrink: 0; font-weight: 600;
+}
+
+/* 正文区 */
+.reader-content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 28px 24px; -webkit-overflow-scrolling: touch;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.reader-text {
+  max-width: 720px; margin: 0 auto;
+  font-family: inherit; font-size: 17px; line-height: 2.2;
+  letter-spacing: 0.02em; color: var(--text);
+  white-space: pre-wrap; word-break: break-word;
+}
+
+/* 标注标记 */
+.annotation-mark {
+  cursor: pointer; transition: background .15s;
+}
+.annotation-mark:hover {
+  filter: brightness(.95);
+}
+
+/* 波浪线 */
+.annotation-wavy {
+  text-decoration: underline wavy var(--ann-color, #e74c3c);
+  text-underline-offset: 4px;
+  text-decoration-thickness: 2px;
+}
+
+/* 直线 */
+.annotation-straight {
+  text-decoration: underline var(--ann-color, #e74c3c);
+  text-underline-offset: 4px;
+  text-decoration-thickness: 2px;
+}
+
+/* 荧光笔 */
+.annotation-highlighter {
+  background: linear-gradient(transparent 55%, color-mix(in srgb, var(--ann-color, #f39c12) 35%, transparent) 55%);
+  padding: 0 1px;
+}
+
+/* 标注工具栏 */
+.annotation-toolbar {
+  position: fixed; z-index: 300;
+  background: var(--card); border-radius: 18px;
+  padding: 14px 16px; min-width: 240px;
+  box-shadow: var(--shadow3), 0 0 0 1px var(--border);
+  animation: fadeIn .2s ease;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+/* 颜色选择器 */
+.ann-colors {
+  display: flex; gap: 9px; justify-content: center;
+}
+.ann-color-btn {
+  width: 26px; height: 26px; border-radius: 50%;
+  cursor: pointer; transition: .15s; flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+.ann-color-btn:hover { transform: scale(1.2); }
+.ann-color-btn.active {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 3px var(--card), 0 0 0 5px currentColor;
+}
+
+/* 线型选择器 */
+.ann-styles {
+  display: flex; gap: 6px;
+}
+.ann-style-btn {
+  flex: 1; padding: 7px 10px; border-radius: 12px;
+  background: var(--bg); cursor: pointer; font-family: inherit;
+  font-size: 12px; font-weight: 600; color: var(--text2);
+  transition: .12s; display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.ann-style-btn:hover { background: var(--hover); }
+.ann-style-btn.active {
+  background: var(--pink3); color: var(--pink);
+}
+.ann-style-icon { font-size: 16px; }
+.ann-style-label { font-size: 10px; }
+
+/* 确认/取消 */
+.ann-actions {
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+.ann-confirm-btn {
+  padding: 7px 18px; border-radius: 14px;
+  background: var(--pink); color: #fff; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 700;
+  transition: .12s;
+}
+.ann-confirm-btn:hover { background: var(--pink2); }
+.ann-cancel-btn {
+  padding: 7px 12px; border-radius: 14px;
+  background: var(--bg); color: var(--text3); cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 700;
+  transition: .12s;
+}
+.ann-cancel-btn:hover { background: var(--hover); }
+
+.reader-empty {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+  color: var(--text3);
+}
+
+/* ── 手机端适配 ── */
+@media (max-width: 768px) {
+  .reader-text {
+    font-size: 16px; line-height: 2.1;
+    padding: 0 4px;
+    max-width: 100%;
+  }
+  .reader-content {
+    padding: 20px 16px;
+  }
+  .reading-book-card {
+    padding: 14px 14px; gap: 10px;
+  }
+  .reading-book-cover {
+    width: 44px; height: 58px;
+  }
+  .reader-topbar {
+    padding: 8px 12px;
+  }
+  .reader-content {
+    padding: 20px 16px;
+  }
 }
 

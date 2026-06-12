@@ -14,6 +14,7 @@ const bottomTabs = [
   { key: 'books', icon: 'books', label: '书架' },
   { key: 'mindmap', icon: 'mindmap', label: '导图' },
   { key: 'inspiration', icon: 'inspiration', label: '灵感' },
+  { key: 'reading', icon: 'reading', label: '阅读' },
   { key: 'aichat', icon: 'aichat', label: 'AI' },
   { key: 'fun', icon: 'fun', label: '乐趣' },
   { key: 'settings', icon: 'settings', label: '设置' },

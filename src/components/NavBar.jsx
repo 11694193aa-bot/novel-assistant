@@ -6,6 +6,7 @@ const mainTabs = [
   { key: 'directory', icon: 'books', label: '书籍目录' },
   { key: 'mindmap', icon: 'mindmap', label: '思维导图' },
   { key: 'inspiration', icon: 'inspiration', label: '灵感卡片' },
+  { key: 'reading', icon: 'reading', label: '阅读' },
   { key: 'aichat', icon: 'aichat', label: 'AI 对话' },
   { key: 'history', icon: 'calendar', label: '历史版本' },
   { key: 'settings', icon: 'settings', label: '设置' },
