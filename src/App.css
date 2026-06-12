@@ -2495,8 +2495,17 @@ button.focus-float-exit,
   width: 52px; height: 68px; flex-shrink: 0;
   border-radius: 10px; overflow: hidden;
   background: var(--bg2); display: flex; align-items: center; justify-content: center;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow); cursor: pointer; position: relative;
+  transition: .15s;
 }
+.reading-book-cover:hover { box-shadow: var(--shadow2); transform: scale(1.05); }
+.reading-book-cover::after {
+  content: '🖼'; position: absolute; inset: 0; display: flex;
+  align-items: center; justify-content: center;
+  background: rgba(0,0,0,.35); color: #fff; font-size: 18px;
+  opacity: 0; transition: .15s;
+}
+.reading-book-cover:hover::after { opacity: 1; }
 .reading-book-cover img {
   width: 100%; height: 100%; object-fit: cover;
 }
@@ -2505,10 +2514,21 @@ button.focus-float-exit,
 }
 
 .reading-book-info { flex: 1; min-width: 0; }
+.reading-book-title-row {
+  display: flex; align-items: center; gap: 6px;
+}
 .reading-book-title {
   font-size: 15px; font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.reading-rename-btn {
+  flex-shrink: 0; width: 24px; height: 24px; border-radius: 10px;
+  background: var(--bg); cursor: pointer; font-size: 13px;
+  color: var(--text3); display: flex; align-items: center; justify-content: center;
+  transition: .12s; opacity: 0;
+}
+.reading-book-card:hover .reading-rename-btn { opacity: 1; }
+.reading-rename-btn:hover { background: var(--pink); color: #fff; }
 .reading-book-author {
   font-size: 12px; color: var(--text3); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

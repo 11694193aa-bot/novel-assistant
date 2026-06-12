@@ -4,10 +4,11 @@ import CatIcon from './CatIcon';
 import { importBookFile } from '../utils/importBook';
 
 export default function ReadingBookList({ isMobile, onSelectBook, onOpenReader }) {
-  const { readingBooks, addReadingBook, deleteReadingBook, renameReadingBook, markDirty, persist } = useStore();
+  const { readingBooks, addReadingBook, deleteReadingBook, renameReadingBook, setReadingBookCover, markDirty, persist } = useStore();
   const [importing, setImporting] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const fileRef = useRef(null);
+  const coverInputRef = useRef(null);
 
   const handleImport = async (e) => {
     const file = e.target.files?.[0];
@@ -17,12 +18,22 @@ export default function ReadingBookList({ isMobile, onSelectBook, onOpenReader }
       const bookData = await importBookFile(file);
       addReadingBook(bookData);
       persist();
-      // 导入完成后显示在书单中，用户点击封面再进入阅读
     } catch (err) {
       alert('导入失败：' + err.message);
     }
     setImporting(false);
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleCoverUpload = (bookId, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setReadingBookCover(bookId, reader.result);
+    };
+    reader.readAsDataURL(file);
+    if (coverInputRef.current) coverInputRef.current.value = '';
   };
 
   const handleDelete = (id, title) => {
@@ -65,6 +76,16 @@ export default function ReadingBookList({ isMobile, onSelectBook, onOpenReader }
           style={{ display: 'none' }}
           onChange={handleImport}
         />
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const bookId = e.target.dataset?.bookId;
+            if (bookId) handleCoverUpload(bookId, e);
+          }}
+        />
       </div>
 
       {/* 空状态 */}
@@ -89,8 +110,18 @@ export default function ReadingBookList({ isMobile, onSelectBook, onOpenReader }
               onTouchEnd={(e) => { clearTimeout(e.currentTarget._longPress); }}
               onTouchMove={(e) => { clearTimeout(e.currentTarget._longPress); }}
             >
-              {/* 封面 */}
-              <div className="reading-book-cover">
+              {/* 封面 — 点击换封面 */}
+              <div
+                className="reading-book-cover"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (coverInputRef.current) {
+                    coverInputRef.current.dataset.bookId = b.id;
+                    coverInputRef.current.click();
+                  }
+                }}
+                title="点击更换封面"
+              >
                 {b.cover ? (
                   <img src={b.cover} alt="" />
                 ) : (
@@ -111,7 +142,14 @@ export default function ReadingBookList({ isMobile, onSelectBook, onOpenReader }
                   />
                 ) : (
                   <>
-                    <div className="reading-book-title">{b.title}</div>
+                    <div className="reading-book-title-row">
+                      <span className="reading-book-title">{b.title}</span>
+                      <button
+                        className="reading-rename-btn"
+                        title="改名"
+                        onClick={(e) => { e.stopPropagation(); setEditingId(b.id); }}
+                      >✎</button>
+                    </div>
                     {b.author && <div className="reading-book-author">{b.author}</div>}
                   </>
                 )}
