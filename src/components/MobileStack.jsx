@@ -17,7 +17,6 @@ const bottomTabs = [
   { key: 'reading', icon: 'reading', label: '阅读' },
   { key: 'aichat', icon: 'aichat', label: 'AI' },
   { key: 'fun', icon: 'fun', label: '乐趣' },
-  { key: 'settings', icon: 'settings', label: '设置' },
 ];
 
 const funMenuItems = [
@@ -355,9 +354,14 @@ export default function MobileStack({
                 style={{background:bookBatchMode?'var(--pink)':'var(--pink3)',color:bookBatchMode?'#fff':'var(--text)',fontWeight:800,fontSize:bookBatchMode?16:20}}>
                 {bookBatchMode ? '✕' : '☰'}
               </button>
-              {!bookBatchMode && <button className="ms-header-btn" onClick={handleAddBook} style={{fontSize:22}}>
-                ＋
-              </button>}
+              {!bookBatchMode && <>
+                <button className="ms-header-btn" onClick={() => onTabChange('settings')} title="设置" style={{fontSize:16}}>
+                  <CatIcon name="settings" size={18} />
+                </button>
+                <button className="ms-header-btn" onClick={handleAddBook} style={{fontSize:22}}>
+                  ＋
+                </button>
+              </>}
             </div>
 
             {/* 书籍批量操作栏 */}
