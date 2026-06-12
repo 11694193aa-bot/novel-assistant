@@ -115,6 +115,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [deleteTarget, setDeleteTarget] = useState(null); // 待删除标注 id
   const [ttsState, setTtsState] = useState('idle'); // idle | playing | paused
   const [ttsSpeed, setTtsSpeed] = useState(1);
+  const ttsSpeedRef = useRef(1);
+  useEffect(() => { ttsSpeedRef.current = ttsSpeed; }, [ttsSpeed]);
   const [ttsVoice, setTtsVoice] = useState(null);
   const ttsVoiceRef = useRef(null);
   const [sysVoices, setSysVoices] = useState([]);
@@ -221,7 +223,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   // ── TTS 引擎：桌面用系统语音 / 手机用云端 ──────────────
   const ttsAudioRef = useRef(null);
   const ttsAbortRef = useRef(null);
-  const ttsGenRef = useRef(0);  // generation 防竞态
+  const ttsGenRef = useRef(0);     // generation 防竞态
+  const scrollRAF = useRef(null);  // 持续滚动动画帧
 
   // ── 桌面端：加载系统语音 ──
   useEffect(() => {
@@ -244,16 +247,42 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
   }, [isMobile]);
 
+  const stopAutoScroll = useCallback(() => {
+    if (scrollRAF.current) { cancelAnimationFrame(scrollRAF.current); scrollRAF.current = null; }
+  }, []);
+
+  const startAutoScroll = useCallback(() => {
+    stopAutoScroll();
+    if (!contentRef.current || !book?.content) return;
+    const el = contentRef.current;
+    const totalH = el.scrollHeight - el.clientHeight;
+    if (totalH <= 0) return;
+    // 估算每字朗读时间 ~250ms（default rate=1），按 ttsSpeed 缩放
+    const msPerChar = 250 / (ttsSpeedRef.current || 1);
+    const totalMs = (book.content.length || 1) * msPerChar;
+    const pxPerMs = totalH / totalMs;
+    let last = performance.now();
+    const tick = (now) => {
+      if (!isSpeakingRef.current) return;
+      const dt = now - last;
+      last = now;
+      el.scrollTop += pxPerMs * dt;
+      scrollRAF.current = requestAnimationFrame(tick);
+    };
+    scrollRAF.current = requestAnimationFrame(tick);
+  }, [book?.content, stopAutoScroll]);
+
   const stopTTS = useCallback(() => {
-    isSpeakingRef.current = false; // 先关标志，防止回调触发
+    isSpeakingRef.current = false;
     ttsGenRef.current++;
+    stopAutoScroll();
     ttsAbortRef.current?.abort();
     ttsAudioRef.current?.pause();
     ttsAudioRef.current = null;
     window.speechSynthesis?.cancel();
     setTtsState('idle');
     setCurrentSentence(-1);
-  }, []);
+  }, [stopAutoScroll]);
 
   // ── 桌面端：SpeechSynthesis 逐块播放 ──
   const speakLocal = useCallback((idx, gen) => {
@@ -262,9 +291,6 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx;
     setCurrentSentence(idx);
-    let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
-    const el = contentRef.current;
-    if (el) el.scrollTo({ top: (cc / (chunks.reduce((s,t)=>s+t.length,0)||1)) * (el.scrollHeight - el.clientHeight), behavior: 'smooth' });
 
     const curGen = ttsGenRef.current;
     const u = new SpeechSynthesisUtterance(chunks[idx]);
@@ -282,9 +308,6 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     const chunks = ttsChunksRef.current;
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx; setCurrentSentence(idx);
-    let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
-    const el = contentRef.current;
-    if (el) el.scrollTo({ top: (cc / (chunks.reduce((s,t)=>s+t.length,0)||1)) * (el.scrollHeight - el.clientHeight), behavior: 'smooth' });
 
     const abort = new AbortController(); ttsAbortRef.current = abort;
     const curGen = ttsGenRef.current;
@@ -316,22 +339,25 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     ttsChunksRef.current = chunks;
     isSpeakingRef.current = true;
     setTtsState('playing');
+    startAutoScroll();
     const gen = ttsGenRef.current;
     const fn = isMobile ? playCloud : speakLocal;
     fn(Math.min(fromIdx, chunks.length - 1), gen);
-  }, [book?.content, stopTTS, isMobile, speakLocal, playCloud]);
+  }, [book?.content, stopTTS, isMobile, speakLocal, playCloud, startAutoScroll]);
 
   const handleTTS = useCallback(() => {
     if (ttsState === 'playing') {
+      stopAutoScroll();
       if (isMobile) { ttsAbortRef.current?.abort(); ttsAudioRef.current?.pause(); }
       else { isSpeakingRef.current = false; window.speechSynthesis?.pause(); }
       setTtsState('paused');
     } else if (ttsState === 'paused') {
       isSpeakingRef.current = true; setTtsState('playing');
+      startAutoScroll();
       if (isMobile) ttsAudioRef.current?.play().catch(()=>{});
       else window.speechSynthesis?.resume();
     } else startTTS(0);
-  }, [ttsState, startTTS, isMobile]);
+  }, [ttsState, startTTS, isMobile, stopAutoScroll, startAutoScroll]);
 
   const handleTTSStop = useCallback(() => stopTTS(), [stopTTS]);
 
