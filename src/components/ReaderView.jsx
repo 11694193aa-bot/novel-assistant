@@ -106,29 +106,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const ttsIdxRef = useRef(0);
   const isSpeakingRef = useRef(false);
 
-  // ── Edge TTS 中文语音列表 ──
-  const EDGE_VOICES = [
-    { name: 'zh-CN-XiaoxiaoNeural', label: '晓晓 (女·自然)' },
-    { name: 'zh-CN-YunxiNeural', label: '云希 (男·自然)' },
-    { name: 'zh-CN-YunjianNeural', label: '云健 (男·成熟)' },
-    { name: 'zh-CN-XiaoyiNeural', label: '晓伊 (女)' },
-    { name: 'zh-CN-YunyangNeural', label: '云扬 (男·新闻)' },
-    { name: 'zh-CN-XiaochenNeural', label: '晓辰 (女)' },
-    { name: 'zh-CN-XiaohanNeural', label: '晓涵 (女)' },
-    { name: 'zh-CN-XiaomengNeural', label: '晓梦 (女)' },
-    { name: 'zh-CN-XiaomoNeural', label: '晓墨 (女)' },
-    { name: 'zh-CN-XiaoqiuNeural', label: '晓秋 (女)' },
-    { name: 'zh-CN-XiaoruiNeural', label: '晓睿 (女)' },
-    { name: 'zh-CN-XiaoshuangNeural', label: '晓双 (女)' },
-    { name: 'zh-CN-XiaoxuanNeural', label: '晓萱 (女)' },
-    { name: 'zh-CN-XiaoyanNeural', label: '晓颜 (女)' },
-    { name: 'zh-CN-XiaoyouNeural', label: '晓悠 (女·童声)' },
-    { name: 'zh-CN-YunfengNeural', label: '云枫 (男)' },
-    { name: 'zh-CN-YunhaoNeural', label: '云皓 (男)' },
-    { name: 'zh-CN-YunxiaNeural', label: '云夏 (男)' },
-    { name: 'zh-CN-YunyeNeural', label: '云野 (男)' },
-    { name: 'zh-CN-YunzeNeural', label: '云泽 (男)' },
-  ];
+  // ── 系统语音列表（运行时填充）──
+  const [sysVoices, setSysVoices] = useState([]);
 
   const [showToolbar, setShowToolbar] = useState(false);
   const [toolbarPos, setToolbarPos] = useState({ x: 0, y: 0 });
@@ -252,133 +231,98 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     return () => window.removeEventListener('keydown', h);
   }, [isMobile]);
 
-  // ── TTS 引擎（Edge TTS → fallback Web Speech）──────────
-  const ttsAudioRef = useRef(null);
-  const ttsAbortRef = useRef(null);
-  const ttsRetryRef = useRef(0);
+  // ── 加载系统语音 ──
+  useEffect(() => {
+    const load = () => {
+      const all = window.speechSynthesis.getVoices();
+      const zh = all.filter(v => v.lang.startsWith('zh'));
+      if (zh.length > 0) {
+        setSysVoices(zh);
+        if (!ttsVoice) {
+          setTtsVoice(zh[0].name);
+          ttsVoiceRef.current = zh[0].name;
+        }
+      }
+    };
+    load();
+    window.speechSynthesis.addEventListener('voiceschanged', load);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
+  }, []);
 
+  // ── TTS：SpeechSynthesis 播报 ───────────────────────────
   const stopTTS = useCallback(() => {
-    ttsAbortRef.current?.abort();
-    ttsAudioRef.current?.pause();
-    ttsAudioRef.current = null;
     window.speechSynthesis?.cancel();
     isSpeakingRef.current = false;
     setTtsState('idle');
     setCurrentSentence(-1);
   }, []);
 
-  // 用 Edge TTS 获取一段音频
-  const fetchEdgeAudio = useCallback(async (text, voice, rate, signal) => {
-    const res = await fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voice, rate }),
-      signal,
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `HTTP ${res.status}`);
-    }
-    const blob = await res.blob();
-    if (blob.size < 100) throw new Error('audio too small');
-    return URL.createObjectURL(blob);
-  }, []);
-
-  // 播放指定块（Edge TTS 优先，失败则用 Web Speech 兜底）
-  const playChunk = useCallback((idx, useEdge = true) => {
+  const playChunk = useCallback((idx) => {
     const chunks = ttsChunksRef.current;
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx;
     setCurrentSentence(idx);
 
-    // 滚动跟随
-    let cc = 0;
-    for (let j = 0; j < idx; j++) cc += chunks[j].length;
+    let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
     const total = chunks.reduce((s, t) => s + t.length, 0);
     const el = contentRef.current;
     if (el) el.scrollTop = (cc / (total || 1)) * (el.scrollHeight - el.clientHeight);
 
-    if (useEdge) {
-      const abort = new AbortController();
-      ttsAbortRef.current = abort;
-      fetchEdgeAudio(chunks[idx], ttsVoiceRef.current, ttsSpeed, abort.signal)
-        .then(url => {
-          if (!isSpeakingRef.current) { URL.revokeObjectURL(url); return; }
-          const a = new Audio(url);
-          a.onended = () => { URL.revokeObjectURL(url); playChunk(idx + 1, true); };
-          a.onerror = () => { URL.revokeObjectURL(url); playChunk(idx + 1, true); };
-          a.play().catch(() => { URL.revokeObjectURL(url); playChunk(idx + 1, true); });
-          ttsAudioRef.current = a;
-        })
-        .catch(() => {
-          // Edge TTS 失败 → 静默降级到 Web Speech
-          if (!isSpeakingRef.current) return;
-          playChunk(idx, false);
-        });
-      return;
-    }
-
-    // Web Speech 兜底
     const utter = new SpeechSynthesisUtterance(chunks[idx]);
     utter.lang = 'zh-CN';
     utter.rate = ttsSpeed;
     utter.volume = 1.0;
     const voices = window.speechSynthesis.getVoices();
-    const zh = voices.find(v => v.lang.startsWith('zh'));
-    if (zh) utter.voice = zh;
-    utter.onend = () => { if (isSpeakingRef.current) playChunk(idx + 1, false); };
-    utter.onerror = () => { if (isSpeakingRef.current) playChunk(idx + 1, false); };
+    const picked = voices.find(v => v.name === ttsVoiceRef.current);
+    if (picked) utter.voice = picked;
+    utter.onend = () => { if (isSpeakingRef.current) playChunk(idx + 1); };
+    utter.onerror = () => { if (isSpeakingRef.current) playChunk(idx + 1); };
     window.speechSynthesis.speak(utter);
-  }, [ttsSpeed, stopTTS, fetchEdgeAudio]);
+  }, [ttsSpeed, stopTTS]);
 
   const startTTS = useCallback((fromIdx = 0) => {
     if (!book?.content) return;
     stopTTS();
-
     const chunks = [];
     const raw = splitSentences(book.content);
     let buf = '';
-    for (const s of raw) {
-      buf += s;
-      if (buf.length >= 250) { chunks.push(buf); buf = ''; }
-    }
+    for (const s of raw) { buf += s; if (buf.length >= 300) { chunks.push(buf); buf = ''; } }
     if (buf.trim()) chunks.push(buf);
     ttsChunksRef.current = chunks;
-    ttsIdxRef.current = Math.min(fromIdx, chunks.length - 1);
     isSpeakingRef.current = true;
     setTtsState('playing');
-    playChunk(ttsIdxRef.current, true);
+    playChunk(Math.min(fromIdx, chunks.length - 1));
   }, [book?.content, stopTTS, playChunk]);
 
   const handleTTS = useCallback(() => {
     if (ttsState === 'playing') {
-      ttsAudioRef.current?.pause();
-      ttsAbortRef.current?.abort();
       window.speechSynthesis?.pause();
       setTtsState('paused');
       isSpeakingRef.current = false;
     } else if (ttsState === 'paused') {
       isSpeakingRef.current = true;
       setTtsState('playing');
-      const a = ttsAudioRef.current;
-      if (a) { a.play().catch(() => {}); } else { window.speechSynthesis?.resume(); }
-    } else {
-      startTTS(0);
-    }
+      window.speechSynthesis?.resume();
+    } else { startTTS(0); }
   }, [ttsState, startTTS]);
 
   const handleTTSStop = useCallback(() => stopTTS(), [stopTTS]);
 
-  const handleVoiceChange = useCallback((voiceName) => {
-    setTtsVoice(voiceName);
-    ttsVoiceRef.current = voiceName;
+  const handleVoiceChange = useCallback((name) => {
+    setTtsVoice(name);
+    ttsVoiceRef.current = name;
     if (!isSpeakingRef.current) return;
-    const curIdx = ttsIdxRef.current;
-    stopTTS();
-    setTimeout(() => startTTS(curIdx), 150);
-  }, [stopTTS, startTTS]);
+    const cur = ttsIdxRef.current;
+    window.speechSynthesis?.cancel();
+    isSpeakingRef.current = false;
+    setTimeout(() => {
+      isSpeakingRef.current = true;
+      setTtsState('playing');
+      playChunk(cur);
+    }, 100);
+  }, [playChunk]);
 
-  useEffect(() => () => stopTTS(), [stopTTS]);
+  useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
   // ── 确认标注 ──
   const handleConfirmAnnotation = () => {
@@ -440,17 +384,21 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
         {/* TTS 控制区 */}
         <div className="reader-tts-group">
-          {/* 语音选择器 — Edge TTS 高品质中文语音 */}
-          <select
-            className="tts-voice-select"
-            value={ttsVoice || EDGE_VOICES[0].name}
-            onChange={(e) => handleVoiceChange(e.target.value)}
-            title="选择语音"
-          >
-            {EDGE_VOICES.map(v => (
-              <option key={v.name} value={v.name}>{v.label}</option>
-            ))}
-          </select>
+          {/* 语音选择器 — 系统中文语音 */}
+          {sysVoices.length > 0 && (
+            <select
+              className="tts-voice-select"
+              value={ttsVoice || ''}
+              onChange={(e) => handleVoiceChange(e.target.value)}
+              title="选择语音"
+            >
+              {sysVoices.map(v => (
+                <option key={v.name} value={v.name}>
+                  {v.name.replace(/Microsoft\s*/i, '').replace(/\(.*\)/, '').trim()}
+                </option>
+              ))}
+            </select>
+          )}
           {ttsState !== 'idle' && (
             <>
               <select
