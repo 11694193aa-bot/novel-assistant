@@ -196,9 +196,17 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       tryShowToolbar();
     };
     const onPointerDown = (e) => {
-      // 点工具栏内部 → 不关
-      if (e.target.closest('.annotation-toolbar')) return;
-      // 用户开始新选择 → 隐藏旧工具栏
+      // 点工具栏/遮罩 → 不关
+      if (e.target.closest('.annotation-toolbar, .reader-overlay, .reader-modal-overlay')) return;
+      // 如果 toolbar 已显示且点的是选中区域 → 用户可能在调手柄，不关
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && sel.toString().trim()) {
+        const range = sel.getRangeAt(0);
+        if (contentRef.current && contentRef.current.contains(range.commonAncestorContainer)) {
+          return; // 用户在调整选区，不关工具栏
+        }
+      }
+      // 新选择 → 关旧工具栏
       userReleasedRef.current = false;
       setShowToolbar(false);
       setPendingRange(null);
@@ -307,7 +315,22 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       isSpeakingRef.current = true;
       setTtsState('playing');
       window.speechSynthesis?.resume();
-    } else { startTTS(0); }
+    } else {
+      // 首次点击时主动加载语音（手机端 voiceschanged 可能不触发）
+      if (sysVoicesRef.current.length === 0) {
+        const all = window.speechSynthesis.getVoices();
+        const zh = all.filter(v => v.lang.startsWith('zh'));
+        if (zh.length > 0) {
+          sysVoicesRef.current = zh;
+          setSysVoices(zh);
+          if (!ttsVoiceRef.current) {
+            setTtsVoice(zh[0].name);
+            ttsVoiceRef.current = zh[0].name;
+          }
+        }
+      }
+      startTTS(0);
+    }
   }, [ttsState, startTTS]);
 
   const handleTTSStop = useCallback(() => stopTTS(), [stopTTS]);
@@ -393,21 +416,20 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
         {/* TTS 控制区 */}
         <div className="reader-tts-group">
-          {/* 语音选择器 — 系统中文语音 */}
-          {sysVoices.length > 0 && (
-            <select
-              className="tts-voice-select"
-              value={ttsVoice || ''}
-              onChange={(e) => handleVoiceChange(e.target.value)}
-              title="选择语音"
-            >
-              {sysVoices.map(v => (
-                <option key={v.name} value={v.name}>
-                  {v.name.replace(/Microsoft\s*/i, '').replace(/\(.*\)/, '').trim()}
-                </option>
-              ))}
-            </select>
-          )}
+          {/* 语音选择器 — 系统中文语音（始终显示） */}
+          <select
+            className="tts-voice-select"
+            value={ttsVoice || ''}
+            onChange={(e) => handleVoiceChange(e.target.value)}
+            title="选择语音"
+          >
+            {sysVoices.length === 0 && <option value="">加载中...</option>}
+            {sysVoices.map(v => (
+              <option key={v.name} value={v.name}>
+                {v.name.replace(/Microsoft\s*/i, '').replace(/\(.*\)/, '').trim()}
+              </option>
+            ))}
+          </select>
           {ttsState !== 'idle' && (
             <>
               <select
@@ -447,6 +469,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         ref={(el) => { contentRef.current = el; restoreReadingProgress(el); }}
         className="reader-content"
         onScroll={saveProgress}
+        onContextMenu={(e) => e.preventDefault()}
+        onTouchStart={(e) => { if (e.touches.length > 1) e.preventDefault(); }}
       >
         <div className="reader-text" key={flashId || '0'}>
           {segments.map((seg, i) => {
