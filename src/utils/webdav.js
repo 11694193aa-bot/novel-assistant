@@ -52,3 +52,13 @@ export async function cloudLoadHistory(key) {
     return null;
   }
 }
+
+// [SPLIT] 从云端拉取书籍 content
+export async function cloudLoadContent(bookId) {
+  try {
+    const result = await apiPost('load', { action: 'getContent', bookId });
+    return result.content || null;
+  } catch (err) {
+    return null;
+  }
+}

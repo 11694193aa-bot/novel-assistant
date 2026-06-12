@@ -25,6 +25,12 @@ export async function onRequest({ request, env }) {
       return new Response(JSON.stringify({ ok: true, data: raw ? JSON.parse(raw) : null }), { headers });
     }
 
+    // [SPLIT] 拉取书籍 content
+    if (body.action === 'getContent' && body.bookId) {
+      const content = await env.SYNC.get(`content_${body.bookId}`);
+      return new Response(JSON.stringify({ ok: true, content: content || null }), { headers });
+    }
+
     // 从历史备份恢复数据
     if (body.action === 'restore' && body.key) {
       const raw = await env.SYNC.get(body.key);

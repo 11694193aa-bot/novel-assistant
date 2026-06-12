@@ -51,15 +51,31 @@ export async function flushCloudSync(stamped) {
 // [SPLIT] 从 IndexedDB 还原 readingBooks 的 content 字段
 async function restoreContents(data) {
   if (!data?.readingBooks?.length) return data;
-  const restored = await Promise.all(
-    data.readingBooks.map(async (b) => {
-      if (b.content !== '__content_ref__') return b;
-      try {
-        const content = await idbGet(`novel_content_${b.id}`);
-        return content ? { ...b, content } : b;
-      } catch (_) { return b; }
-    })
-  );
+  const restored = [];
+  for (const b of data.readingBooks) {
+    if (b.content !== '__content_ref__') {
+      restored.push(b);
+      continue;
+    }
+    // 1. 先查本地 IndexedDB
+    try {
+      const localContent = await idbGet(`novel_content_${b.id}`);
+      if (localContent) { restored.push({ ...b, content: localContent }); continue; }
+    } catch (_) {}
+    // 2. 本地没有 → 从云端拉
+    try {
+      const { cloudLoadContent } = await import('./webdav');
+      const cloudContent = await cloudLoadContent(b.id);
+      if (cloudContent) {
+        // 拉到了就存本地
+        await idbSet(`novel_content_${b.id}`, cloudContent).catch(() => {});
+        restored.push({ ...b, content: cloudContent });
+        continue;
+      }
+    } catch (_) {}
+    // 3. 都没有 → 保留占位符
+    restored.push(b);
+  }
   return { ...data, readingBooks: restored };
 }
 
@@ -103,7 +119,7 @@ export async function saveData(key, data) {
     );
   } catch (_) {}
 
-  // 主数据不含 content，体积大幅减小
+  // [SPLIT] 主数据不含 content，content 通过 _contentPayload 分片同步
   const strippedData = { ...data, readingBooks: readingBooksStripped };
   const stamped = { ...strippedData, _updatedAt: Date.now() };
 
@@ -116,6 +132,11 @@ export async function saveData(key, data) {
     await saveHistory(key, stamped, stamped._updatedAt);
   } catch (e) {
     console.error('本地历史写入失败:', e.message);
+  }
+
+  // [SPLIT] 云同步时带上 content 分片
+  if (Object.keys(contentMap).length > 0) {
+    stamped._contentPayload = contentMap;
   }
   scheduleCloudSync(stamped);
 }

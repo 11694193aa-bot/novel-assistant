@@ -31,6 +31,13 @@ export async function onRequest({ request, env }) {
       }
     }
 
+    // [SPLIT] 内容分片同步：content_<bookId> 单独存 KV
+    if (data._contentPayload) {
+      for (const [bookId, content] of Object.entries(data._contentPayload)) {
+        tasks.push(env.SYNC.put(`content_${bookId}`, content));
+      }
+    }
+
     tasks.push(env.SYNC.put('data', JSON.stringify(data)));
     tasks.push(env.SYNC.put(`history_${ts}`, JSON.stringify(data)));
 
