@@ -1,2 +1,5 @@
-node_modules/\ndist/\nsite.zip\nsite.tar.gz
-node_modules
+node_modules/
+dist/
+site.zip
+site.tar.gz
+.codex/config.toml
