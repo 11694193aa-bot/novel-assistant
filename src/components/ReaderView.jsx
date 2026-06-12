@@ -118,8 +118,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [deleteTarget, setDeleteTarget] = useState(null); // 待删除标注 id
   const [ttsState, setTtsState] = useState('idle'); // idle | playing | paused
   const [ttsSpeed, setTtsSpeed] = useState(1);
-  const [ttsVoice, setTtsVoice] = useState(EDGE_VOICES[0].name); // 默认晓晓
-  const ttsVoiceRef = useRef(EDGE_VOICES[0].name);
+  const [ttsVoice, setTtsVoice] = useState(null);
+  const ttsVoiceRef = useRef(null);
   const [currentSentence, setCurrentSentence] = useState(-1);
   const progressRestored = useRef(false);
 
@@ -311,16 +311,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const handleVoiceChange = useCallback((name) => {
     setTtsVoice(name);
     ttsVoiceRef.current = name;
-    if (!isSpeakingRef.current) return;
-    const cur = ttsIdxRef.current;
-    window.speechSynthesis?.cancel();
-    isSpeakingRef.current = false;
-    setTimeout(() => {
-      isSpeakingRef.current = true;
-      setTtsState('playing');
-      playChunk(cur);
-    }, 100);
-  }, [playChunk]);
+    // 不打断当前句，下一句自动用新语音 — 避免 cancel 竞态
+  }, []);
 
   useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
