@@ -221,6 +221,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   // ── TTS 引擎：桌面用系统语音 / 手机用云端 ──────────────
   const ttsAudioRef = useRef(null);
   const ttsAbortRef = useRef(null);
+  const ttsGenRef = useRef(0);  // generation 防竞态
 
   // ── 桌面端：加载系统语音 ──
   useEffect(() => {
@@ -244,17 +245,19 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   }, [isMobile]);
 
   const stopTTS = useCallback(() => {
+    isSpeakingRef.current = false; // 先关标志，防止回调触发
+    ttsGenRef.current++;
     ttsAbortRef.current?.abort();
     ttsAudioRef.current?.pause();
     ttsAudioRef.current = null;
     window.speechSynthesis?.cancel();
-    isSpeakingRef.current = false;
     setTtsState('idle');
     setCurrentSentence(-1);
   }, []);
 
   // ── 桌面端：SpeechSynthesis 逐块播放 ──
-  const speakLocal = useCallback((idx) => {
+  const speakLocal = useCallback((idx, gen) => {
+    if (gen !== undefined && gen !== ttsGenRef.current) return; // 过期回调
     const chunks = ttsChunksRef.current;
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx;
@@ -263,17 +266,19 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     const el = contentRef.current;
     if (el) el.scrollTop = (cc / (chunks.reduce((s,t)=>s+t.length,0)||1)) * (el.scrollHeight - el.clientHeight);
 
+    const curGen = ttsGenRef.current;
     const u = new SpeechSynthesisUtterance(chunks[idx]);
     u.lang = 'zh-CN'; u.rate = ttsSpeed; u.volume = 1;
     const v = sysVoicesRef.current.find(v => v.name === ttsVoiceRef.current) || sysVoicesRef.current[0];
     if (v) u.voice = v;
-    u.onend = () => { if (isSpeakingRef.current) speakLocal(idx + 1); };
-    u.onerror = () => { if (isSpeakingRef.current) speakLocal(idx + 1); };
+    u.onend = () => { if (isSpeakingRef.current && ttsGenRef.current === curGen) speakLocal(idx + 1, curGen); };
+    u.onerror = () => { if (isSpeakingRef.current && ttsGenRef.current === curGen) speakLocal(idx + 1, curGen); };
     window.speechSynthesis.speak(u);
   }, [ttsSpeed, stopTTS]);
 
   // ── 手机端：云端 TTS fetch Audio ──
-  const playCloud = useCallback(async (idx) => {
+  const playCloud = useCallback(async (idx, gen) => {
+    if (gen !== undefined && gen !== ttsGenRef.current) return;
     const chunks = ttsChunksRef.current;
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx; setCurrentSentence(idx);
@@ -282,24 +287,23 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     if (el) el.scrollTop = (cc / (chunks.reduce((s,t)=>s+t.length,0)||1)) * (el.scrollHeight - el.clientHeight);
 
     const abort = new AbortController(); ttsAbortRef.current = abort;
+    const curGen = ttsGenRef.current;
     try {
       const res = await fetch('/api/tts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:chunks[idx],rate:ttsSpeed}), signal:abort.signal });
       if (!res.ok) throw new Error('fail');
       const blob = await res.blob();
-      if (!isSpeakingRef.current || abort.signal.aborted) return;
+      if (!isSpeakingRef.current || abort.signal.aborted || ttsGenRef.current !== curGen) return;
       const url = URL.createObjectURL(blob);
       const a = new Audio(url);
-      a.onended = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playCloud(idx + 1); };
-      a.onerror = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playCloud(idx + 1); };
+      a.onended = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current && ttsGenRef.current === curGen) playCloud(idx + 1, curGen); };
+      a.onerror = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current && ttsGenRef.current === curGen) playCloud(idx + 1, curGen); };
       ttsAudioRef.current = a;
-      a.play().catch(() => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playCloud(idx + 1); });
+      a.play().catch(() => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playCloud(idx + 1, curGen); });
     } catch (e) {
-      if (abort.signal.aborted) return;
-      if (isSpeakingRef.current) { await new Promise(r=>setTimeout(r,500)); if (isSpeakingRef.current) playCloud(idx); }
+      if (abort.signal.aborted || ttsGenRef.current !== curGen) return;
+      if (isSpeakingRef.current) { await new Promise(r=>setTimeout(r,500)); if (isSpeakingRef.current && ttsGenRef.current === curGen) playCloud(idx, curGen); }
     }
   }, [ttsSpeed, stopTTS]);
-
-  const playChunk = isMobile ? playCloud : speakLocal;
 
   const startTTS = useCallback((fromIdx = 0) => {
     if (!book?.content) return;
@@ -312,14 +316,16 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     ttsChunksRef.current = chunks;
     isSpeakingRef.current = true;
     setTtsState('playing');
-    playChunk(Math.min(fromIdx, chunks.length - 1));
-  }, [book?.content, stopTTS, playChunk, isMobile]);
+    const gen = ttsGenRef.current;
+    const fn = isMobile ? playCloud : speakLocal;
+    fn(Math.min(fromIdx, chunks.length - 1), gen);
+  }, [book?.content, stopTTS, isMobile, speakLocal, playCloud]);
 
   const handleTTS = useCallback(() => {
     if (ttsState === 'playing') {
       if (isMobile) { ttsAbortRef.current?.abort(); ttsAudioRef.current?.pause(); }
-      else window.speechSynthesis?.pause();
-      setTtsState('paused'); isSpeakingRef.current = false;
+      else { isSpeakingRef.current = false; window.speechSynthesis?.pause(); }
+      setTtsState('paused');
     } else if (ttsState === 'paused') {
       isSpeakingRef.current = true; setTtsState('playing');
       if (isMobile) ttsAudioRef.current?.play().catch(()=>{});
@@ -337,11 +343,11 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     setTtsSpeed(newSpeed);
     if (!isSpeakingRef.current) return;
     const cur = ttsIdxRef.current;
-    if (isMobile) { stopTTS(); setTimeout(() => startTTS(cur), 100); }
-    else { window.speechSynthesis?.cancel(); setTimeout(() => { if (isSpeakingRef.current) speakLocal(cur); }, 50); }
-  }, [isMobile, stopTTS, startTTS, speakLocal]);
+    stopTTS();
+    setTimeout(() => { if (!isSpeakingRef.current) return; isSpeakingRef.current = true; setTtsState('playing'); startTTS(cur); }, 100);
+  }, [stopTTS, startTTS]);
 
-  useEffect(() => () => { window.speechSynthesis?.cancel(); ttsAbortRef.current?.abort(); }, []);
+  useEffect(() => () => { isSpeakingRef.current = false; window.speechSynthesis?.cancel(); ttsAbortRef.current?.abort(); }, []);
 
   // ── 确认标注 ──
   const handleConfirmAnnotation = () => {
