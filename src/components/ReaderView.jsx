@@ -524,28 +524,18 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
           {(() => {
             const curChunk = currentChunkText;
             const isPlaying = ttsState === 'playing' && curChunk;
-            // [FIX-1] splitBySentence — 只高亮精确匹配当前朗读句的片段
+            // [FIX-1] 大段拆句后用 includes 匹配，加长度保护防误触发
             const splitBySentence = (text) => {
               if (!isPlaying) return [{ text, match: false }];
               const c = curChunk.trim();
-
-              // 小段直接比较（text 比 curChunk 短的情况）
-              if (text.length <= c.length) {
-                const t = text.trim();
-                const match = t.length > 3 &&
-                  /[一-鿿]/.test(t) &&
-                  c.startsWith(t) &&
-                  t.length / c.length > 0.6;
-                return [{ text, match }];
-              }
-
-              // 大段 → 拆句
+              if (!c) return [{ text, match: false }];
               const parts = text.split(/(?<=[。！？\n])/g);
               return parts.map(p => {
                 const t = p.trim();
-                const match = t.length > 3 &&
+                const match =
+                  t.length > 4 &&
                   /[一-鿿]/.test(t) &&
-                  (t === c || (c.length > 0 && t === c.replace(/[。！？]$/, '')));
+                  c.includes(t);
                 return { text: p, match };
               });
             };

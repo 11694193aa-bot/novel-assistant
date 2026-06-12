@@ -115,7 +115,8 @@
       "Bash(curl -s -o /tmp/tts_long.mp3 -w \"HTTP:%{http_code} Size:%{size_download}\" -X POST \"https://41035773.novel-assistant-drf.pages.dev/api/tts\" -H \"Content-Type: application/json\" -d '{\"text\":\"春天来了，万物复苏，大地一片生机勃勃的景象。柳树抽出了嫩绿的新芽，桃花绽放出粉红的笑脸。小燕子从南方飞回来了，在蓝天上自由自在地飞翔。\",\"voice\":\"zh-CN\",\"rate\":1}' --connect-timeout 15)",
       "Bash(curl -s -o /tmp/tts_fast.mp3 -w \"HTTP:%{http_code} Size:%{size_download}\" -X POST \"https://41035773.novel-assistant-drf.pages.dev/api/tts\" -H \"Content-Type: application/json\" -d '{\"text\":\"快速朗读测试文本内容\",\"voice\":\"zh-CN\",\"rate\":1.5}' --connect-timeout 15)",
       "Bash(xxd -l 4 /tmp/tts_test.mp3)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(echo \"第一章 春天的早晨。清晨阳光透过窗纱洒进房间。林小雨伸了个懒腰从床上坐起来。窗外几只麻雀在枝头叽叽喳喳地叫着。\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\11694\\AppData\\Local\\Temp",
