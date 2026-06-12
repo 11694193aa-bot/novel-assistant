@@ -113,6 +113,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [selectedStyle, setSelectedStyle] = useState('wavy');
   const [pendingRange, setPendingRange] = useState(null);
   const [flashId, setFlashId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null); // 待删除标注 id
   const [ttsState, setTtsState] = useState('idle'); // idle | playing | paused
   const [ttsSpeed, setTtsSpeed] = useState(1);
   const [ttsVoice, setTtsVoice] = useState(null);   // 选中的语音名
@@ -406,9 +407,12 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     e.stopPropagation();
     e.preventDefault();
     setShowToolbar(false);
-    if (confirm('删除这条标注？')) {
-      removeAnnotation(bookId, annotationId);
-    }
+    setDeleteTarget(annotationId);
+  };
+
+  const confirmDeleteAnnotation = () => {
+    if (deleteTarget) removeAnnotation(bookId, deleteTarget);
+    setDeleteTarget(null);
   };
 
   // ── 构建分段 ──
@@ -559,6 +563,21 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
           <div className="ann-actions">
             <button className="ann-confirm-btn" onClick={handleConfirmAnnotation}>✓ 标记</button>
             <button className="ann-cancel-btn" onClick={handleCancelAnnotation}>✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* 删除标注确认弹窗 */}
+      {deleteTarget && (
+        <div className="reader-modal-overlay" onClick={() => setDeleteTarget(null)}>
+          <div className="reader-modal" onClick={e => e.stopPropagation()}>
+            <div className="reader-modal-icon">🗑</div>
+            <p className="reader-modal-text">确定删除这条标注？</p>
+            <p className="reader-modal-sub">删除后不可恢复</p>
+            <div className="reader-modal-actions">
+              <button className="reader-modal-btn reader-modal-btn-del" onClick={confirmDeleteAnnotation}>删除</button>
+              <button className="reader-modal-btn reader-modal-btn-cancel" onClick={() => setDeleteTarget(null)}>取消</button>
+            </div>
           </div>
         </div>
       )}
