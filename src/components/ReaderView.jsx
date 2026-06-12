@@ -324,7 +324,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
     const curGen = ttsGenRef.current;
     const u = new SpeechSynthesisUtterance(chunk);
-    u.lang = 'zh-CN'; u.rate = ttsSpeed; u.volume = 1;
+    // [FIX-3] 用 ref 读最新速率，避免闭包陈旧
+    u.lang = 'zh-CN'; u.rate = ttsSpeedRef.current; u.volume = 1;
     const v = sysVoicesRef.current.find(v => v.name === ttsVoiceRef.current) || sysVoicesRef.current[0];
     if (v) u.voice = v;
 
@@ -354,7 +355,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     u.onend = () => { clearTimeout(fallbackTimer); if (isSpeakingRef.current && ttsGenRef.current === curGen) speakLocal(idx + 1, curGen); };
     u.onerror = (e) => { clearTimeout(fallbackTimer); if (e.error !== 'interrupted' && isSpeakingRef.current && ttsGenRef.current === curGen) speakLocal(idx + 1, curGen); };
     window.speechSynthesis.speak(u);
-  }, [ttsSpeed, stopTTS]);
+  // [FIX-3] 去掉 ttsSpeed 依赖——用 ref 读，避免速率变化时重建回调导致旧 onend 失效
+  }, [stopTTS]);
 
   // ── 手机端：云端 TTS fetch Audio ──
   const playCloud = useCallback(async (idx, gen) => {
@@ -375,7 +377,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     const abort = new AbortController(); ttsAbortRef.current = abort;
     const curGen = ttsGenRef.current;
     try {
-      const res = await fetch('/api/tts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:chunks[idx],rate:ttsSpeed}), signal:abort.signal });
+      const res = await fetch('/api/tts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:chunks[idx],rate:ttsSpeedRef.current}), signal:abort.signal });
       if (!res.ok) throw new Error('fail');
       const blob = await res.blob();
       if (!isSpeakingRef.current || abort.signal.aborted || ttsGenRef.current !== curGen) return;
