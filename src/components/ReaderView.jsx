@@ -154,16 +154,13 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     setTimeout(() => { el.scrollTop = ratio * (el.scrollHeight - el.clientHeight); }, 300);
   }, [book?.readingProgress, book?.content]);
 
-  // ── 工具栏触发：等用户松手 + 选区稳定后再弹出 ──
+  // ── 工具栏触发：选区稳定 500ms 后弹出 ──
   const selTimerRef = useRef(null);
-  const userReleasedRef = useRef(false);
   const prevSelTextRef = useRef('');
 
-  // 松手后等待 400ms 无选区变更 → 弹出工具栏
   const tryShowToolbar = useCallback(() => {
     clearTimeout(selTimerRef.current);
     selTimerRef.current = setTimeout(() => {
-      if (!userReleasedRef.current) return;
       const offsets = getSelectionOffsets(contentRef.current);
       const curText = (offsets && offsets.text.trim()) || '';
 
@@ -175,7 +172,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
           const rect = sel.getRangeAt(0).getBoundingClientRect();
           setToolbarPos({
             x: Math.min(rect.left + rect.width / 2, window.innerWidth - 200),
-            y: Math.max(rect.top - 80, 20), // 往上多偏移避开选中手柄
+            y: Math.max(rect.top - 80, 20),
           });
         }
         setShowToolbar(true);
@@ -184,44 +181,27 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         setPendingRange(null);
         prevSelTextRef.current = '';
       }
-    }, 400);
+    }, 500);
   }, []);
 
   useEffect(() => {
-    const onSelectionChange = () => {
-      if (userReleasedRef.current) tryShowToolbar();
-    };
-    const onPointerUp = (e) => {
-      userReleasedRef.current = true;
-      tryShowToolbar();
-    };
-    const onPointerDown = (e) => {
-      // 点工具栏/遮罩 → 不关
+    const onSelectionChange = () => tryShowToolbar();
+    const onClickOutside = (e) => {
+      // 点工具栏/遮罩/弹窗 → 不关
       if (e.target.closest('.annotation-toolbar, .reader-overlay, .reader-modal-overlay')) return;
-      // 如果 toolbar 已显示且点的是选中区域 → 用户可能在调手柄，不关
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0 && sel.toString().trim()) {
-        const range = sel.getRangeAt(0);
-        if (contentRef.current && contentRef.current.contains(range.commonAncestorContainer)) {
-          return; // 用户在调整选区，不关工具栏
-        }
-      }
-      // 新选择 → 关旧工具栏
-      userReleasedRef.current = false;
+      // 点阅读内容区内 → 不关（让 selectionchange 处理）
+      if (contentRef.current?.contains(e.target)) return;
+      // 点外面 → 关
       setShowToolbar(false);
       setPendingRange(null);
     };
     document.addEventListener('selectionchange', onSelectionChange);
-    document.addEventListener('mouseup', onPointerUp);
-    document.addEventListener('touchend', onPointerUp);
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('touchstart', onPointerDown, { passive: true });
+    document.addEventListener('mousedown', onClickOutside);
+    document.addEventListener('touchstart', onClickOutside, { passive: true });
     return () => {
       document.removeEventListener('selectionchange', onSelectionChange);
-      document.removeEventListener('mouseup', onPointerUp);
-      document.removeEventListener('touchend', onPointerUp);
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('touchstart', onPointerDown);
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('touchstart', onClickOutside);
       clearTimeout(selTimerRef.current);
     };
   }, [tryShowToolbar]);
