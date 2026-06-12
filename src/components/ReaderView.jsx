@@ -106,10 +106,6 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const ttsIdxRef = useRef(0);
   const isSpeakingRef = useRef(false);
 
-  // ── 系统语音列表（ref 缓存，避免 playChunk 闭包过期）──
-  const sysVoicesRef = useRef([]);
-  const [sysVoices, setSysVoices] = useState([]); // 仅用于 UI 渲染
-
   const [showToolbar, setShowToolbar] = useState(false);
   const [toolbarPos, setToolbarPos] = useState({ x: 0, y: 0 });
   const [selectedColor, setSelectedColor] = useState(ANNOTATION_COLORS[0].value);
@@ -119,13 +115,10 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [deleteTarget, setDeleteTarget] = useState(null); // 待删除标注 id
   const [ttsState, setTtsState] = useState('idle'); // idle | playing | paused
   const [ttsSpeed, setTtsSpeed] = useState(1);
-  const [ttsVoice, setTtsVoice] = useState(null);
-  const ttsVoiceRef = useRef(null);
   const [currentSentence, setCurrentSentence] = useState(-1);
   const progressRestored = useRef(false);
 
   useEffect(() => { progressRestored.current = false; }, [bookId]);
-  useEffect(() => { ttsVoiceRef.current = ttsVoice; }, [ttsVoice]);
 
   // 切换书籍时停止朗读
   useEffect(() => {
@@ -220,44 +213,20 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     return () => window.removeEventListener('keydown', h);
   }, [isMobile]);
 
-  // ── 加载系统语音 ──
-  useEffect(() => {
-    let loaded = false;
-    const load = () => {
-      const all = window.speechSynthesis.getVoices();
-      const zh = all.filter(v => v.lang.startsWith('zh'));
-      if (zh.length > 0) {
-        loaded = true;
-        setSysVoices(zh);
-        sysVoicesRef.current = zh;
-        if (!ttsVoiceRef.current) {
-          setTtsVoice(zh[0].name);
-          ttsVoiceRef.current = zh[0].name;
-        }
-      }
-    };
-    load();
+  // ── TTS：云端 Google TTS（fetch Audio，不依赖手机 TTS 引擎）──
+  const ttsAudioRef = useRef(null);
+  const ttsAbortRef = useRef(null);
 
-    // Android 需要先 speak 才会加载语音引擎
-    if (!loaded) {
-      const dummy = new SpeechSynthesisUtterance('');
-      dummy.volume = 0;
-      speechSynthesis.speak(dummy);
-    }
-
-    window.speechSynthesis.addEventListener('voiceschanged', load);
-    return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
-  }, []);
-
-  // ── TTS：SpeechSynthesis 播报 ───────────────────────────
   const stopTTS = useCallback(() => {
-    window.speechSynthesis?.cancel();
+    ttsAbortRef.current?.abort();
+    ttsAudioRef.current?.pause();
+    ttsAudioRef.current = null;
     isSpeakingRef.current = false;
     setTtsState('idle');
     setCurrentSentence(-1);
   }, []);
 
-  const playChunk = useCallback((idx) => {
+  const playChunk = useCallback(async (idx) => {
     const chunks = ttsChunksRef.current;
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx;
@@ -268,17 +237,32 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     const el = contentRef.current;
     if (el) el.scrollTop = (cc / (total || 1)) * (el.scrollHeight - el.clientHeight);
 
-    const utter = new SpeechSynthesisUtterance(chunks[idx]);
-    utter.lang = 'zh-CN';
-    utter.rate = ttsSpeed;
-    utter.volume = 1.0;
-    // 用 ref 语音列表——杜绝闭包过期导致回退默认语音
-    const voices = sysVoicesRef.current;
-    const picked = voices.find(v => v.name === ttsVoiceRef.current) || voices[0];
-    if (picked) utter.voice = picked;
-    utter.onend = () => { if (isSpeakingRef.current) playChunk(idx + 1); };
-    utter.onerror = () => { if (isSpeakingRef.current) playChunk(idx + 1); };
-    window.speechSynthesis.speak(utter);
+    const abort = new AbortController();
+    ttsAbortRef.current = abort;
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: chunks[idx], rate: ttsSpeed }),
+        signal: abort.signal,
+      });
+      if (!res.ok) throw new Error('TTS fail');
+      const blob = await res.blob();
+      if (!isSpeakingRef.current || abort.signal.aborted) return;
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      a.onended = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playChunk(idx + 1); };
+      a.onerror = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playChunk(idx + 1); };
+      ttsAudioRef.current = a;
+      a.play().catch(() => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playChunk(idx + 1); });
+    } catch (e) {
+      if (abort.signal.aborted) return;
+      // 网络失败等 500ms 重试
+      if (isSpeakingRef.current) {
+        await new Promise(r => setTimeout(r, 500));
+        if (isSpeakingRef.current) playChunk(idx);
+      }
+    }
   }, [ttsSpeed, stopTTS]);
 
   const startTTS = useCallback((fromIdx = 0) => {
@@ -287,7 +271,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     const chunks = [];
     const raw = splitSentences(book.content);
     let buf = '';
-    for (const s of raw) { buf += s; if (buf.length >= 300) { chunks.push(buf); buf = ''; } }
+    for (const s of raw) { buf += s; if (buf.length >= 180) { chunks.push(buf); buf = ''; } }
     if (buf.trim()) chunks.push(buf);
     ttsChunksRef.current = chunks;
     isSpeakingRef.current = true;
@@ -297,53 +281,30 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
   const handleTTS = useCallback(() => {
     if (ttsState === 'playing') {
-      window.speechSynthesis?.pause();
+      ttsAbortRef.current?.abort();
+      ttsAudioRef.current?.pause();
       setTtsState('paused');
       isSpeakingRef.current = false;
     } else if (ttsState === 'paused') {
       isSpeakingRef.current = true;
       setTtsState('playing');
-      window.speechSynthesis?.resume();
+      ttsAudioRef.current?.play().catch(() => {});
     } else {
-      // 首次点击时主动加载语音（手机端 voiceschanged 可能不触发）
-      if (sysVoicesRef.current.length === 0) {
-        const all = window.speechSynthesis.getVoices();
-        const zh = all.filter(v => v.lang.startsWith('zh'));
-        if (zh.length > 0) {
-          sysVoicesRef.current = zh;
-          setSysVoices(zh);
-          if (!ttsVoiceRef.current) {
-            setTtsVoice(zh[0].name);
-            ttsVoiceRef.current = zh[0].name;
-          }
-        }
-      }
       startTTS(0);
     }
   }, [ttsState, startTTS]);
 
   const handleTTSStop = useCallback(() => stopTTS(), [stopTTS]);
 
-  const handleVoiceChange = useCallback((name) => {
-    setTtsVoice(name);
-    ttsVoiceRef.current = name;
-    // 不打断当前句，下一句自动用新语音
-  }, []);
-
-  // 倍速即时生效：打断当前句，从同一位置用新速度继续
   const handleSpeedChange = useCallback((newSpeed) => {
     setTtsSpeed(newSpeed);
     if (!isSpeakingRef.current) return;
     const cur = ttsIdxRef.current;
-    window.speechSynthesis?.cancel();
-    // cancel 后重新从当前块播放（用新速度）
-    setTimeout(() => {
-      if (!isSpeakingRef.current) return;
-      playChunk(cur);
-    }, 50);
-  }, [playChunk]);
+    stopTTS();
+    setTimeout(() => { if (isSpeakingRef.current) startTTS(cur); }, 100);
+  }, [stopTTS, startTTS]);
 
-  useEffect(() => () => window.speechSynthesis?.cancel(), []);
+  useEffect(() => () => stopTTS(), [stopTTS]);
 
   // ── 确认标注 ──
   const handleConfirmAnnotation = () => {
@@ -405,20 +366,6 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
         {/* TTS 控制区 */}
         <div className="reader-tts-group">
-          {/* 语音选择器 — 系统中文语音（始终显示） */}
-          <select
-            className="tts-voice-select"
-            value={ttsVoice || ''}
-            onChange={(e) => handleVoiceChange(e.target.value)}
-            title="选择语音"
-          >
-            {sysVoices.length === 0 && <option value="">加载中...</option>}
-            {sysVoices.map(v => (
-              <option key={v.name} value={v.name}>
-                {v.name.replace(/Microsoft\s*/i, '').replace(/\(.*\)/, '').trim()}
-              </option>
-            ))}
-          </select>
           {ttsState !== 'idle' && (
             <>
               <select
