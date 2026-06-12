@@ -7,7 +7,7 @@
 async function tryEdgeTTS(text, rate) {
   const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="zh-CN"><voice name="zh-CN-YunyangNeural"><prosody rate="${rate || 1}" pitch="+0Hz">${safe}</prosody></voice></speak>`;
-  const token = Date.now().toString(36) + Math.random().toString(36).slice(2,10);
+  const token = '6A5AA1D4EAFF4E9FB37E23D68491D6F4';
 
   const res = await fetch(`https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${token}`, {
     method: 'POST',
@@ -28,7 +28,7 @@ async function tryEdgeTTS(text, rate) {
 // ── Google TTS ───────────────────────────────────────────
 async function tryGoogleTTS(text, rate) {
   // Google 单次限制约 200 字
-  const t = text.slice(0, 180);
+  const t = text.slice(0, 450);
   const speed = Math.round((rate || 1) * 1); // Google speed: 0.5-2, default 1
   const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(t)}&tl=zh-CN&client=tw-ob&ttsspeed=${speed}`;
   const res = await fetch(url, {
