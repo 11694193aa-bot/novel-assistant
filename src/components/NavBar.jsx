@@ -128,8 +128,7 @@ export default function NavBar({ activeTab, onTabChange, onGachaClick, onQuickNo
         ))}
       </div>
 
-      {/* 保存到云端按钮 */}
-      // [FIX-2] 直接调用解构的 persist
+      {/* 保存到云端按钮 — persist 从顶层解构 */}
       <button className="nav-save-btn" onClick={() => persist()} title="保存到云端 (Ctrl+Shift+S)">
         <CatIcon name="import" size={16} /> <span className="tab-label">保存</span>
       </button>

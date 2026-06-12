@@ -373,9 +373,10 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx; setCurrentSentence(idx);
     let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
-    // [FIX] 同步记录 chunk 文本和全文偏移
+    // [FIX] 同步记录 chunk 文本和全文偏移 + 设置高亮范围（手机端之前缺失）
     setCurrentChunkText(chunks[idx]);
     setCurrentChunkOffset(cc);
+    setHighlightRange({ start: cc, end: cc + chunks[idx].length });
     // [FIX-1] rAF 滚动到当前高亮句
     requestAnimationFrame(() => {
       const el = document.querySelector('.tts-highlight');
