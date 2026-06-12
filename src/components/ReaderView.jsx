@@ -376,16 +376,20 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
   const handleTTSStop = useCallback(() => stopTTS(), [stopTTS]);
 
-  // 语音切换：取消后从当前块用新语音继续
-  const prevVoiceRef = useRef(ttsVoice);
-  useEffect(() => {
-    if (ttsVoice === prevVoiceRef.current) return;
-    prevVoiceRef.current = ttsVoice;
+  // 语音切换：直接取消 + 从当前块用新语音继续
+  const handleVoiceChange = useCallback((voiceName) => {
+    setTtsVoice(voiceName);
+    ttsVoiceRef.current = voiceName;
     if (!isSpeakingRef.current) return;
     const curIdx = ttsIdxRef.current;
     window.speechSynthesis.cancel();
-    setTimeout(() => { if (isSpeakingRef.current) startTTS(curIdx); }, 150);
-  }, [ttsVoice, startTTS]);
+    // 等 cancel 生效后重启
+    setTimeout(() => {
+      if (!isSpeakingRef.current) return;
+      isSpeakingRef.current = false; // startTTS 里会重设 true
+      startTTS(curIdx);
+    }, 200);
+  }, [startTTS]);
 
   // 卸载时清理
   useEffect(() => {
@@ -460,7 +464,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
             <select
               className="tts-voice-select"
               value={ttsVoice || ''}
-              onChange={(e) => setTtsVoice(e.target.value)}
+              onChange={(e) => handleVoiceChange(e.target.value)}
               title="选择语音"
             >
               {availableVoices
