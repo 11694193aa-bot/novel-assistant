@@ -222,13 +222,14 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
   // ── 加载系统语音 ──
   useEffect(() => {
+    let loaded = false;
     const load = () => {
       const all = window.speechSynthesis.getVoices();
       const zh = all.filter(v => v.lang.startsWith('zh'));
       if (zh.length > 0) {
+        loaded = true;
         setSysVoices(zh);
         sysVoicesRef.current = zh;
-        // 用 ref 判断避免闭包过期 → 已选语音不会被重置
         if (!ttsVoiceRef.current) {
           setTtsVoice(zh[0].name);
           ttsVoiceRef.current = zh[0].name;
@@ -236,6 +237,14 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       }
     };
     load();
+
+    // Android 需要先 speak 才会加载语音引擎
+    if (!loaded) {
+      const dummy = new SpeechSynthesisUtterance('');
+      dummy.volume = 0;
+      speechSynthesis.speak(dummy);
+    }
+
     window.speechSynthesis.addEventListener('voiceschanged', load);
     return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
   }, []);
