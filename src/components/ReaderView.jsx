@@ -185,22 +185,27 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     }, 500);
   }, []);
 
+  // [FIX-2] 同时监听 selectionchange / mouseup / touchend，兼容移动端
   useEffect(() => {
     const onSelectionChange = () => tryShowToolbar();
+    const onPointerUp = () => tryShowToolbar();
     const onClickOutside = (e) => {
-      // 点工具栏/遮罩/弹窗 → 不关
       if (e.target.closest('.annotation-toolbar, .reader-overlay, .reader-modal-overlay')) return;
-      // 点阅读内容区内 → 不关（让 selectionchange 处理）
       if (contentRef.current?.contains(e.target)) return;
-      // 点外面 → 关
       setShowToolbar(false);
       setPendingRange(null);
     };
     document.addEventListener('selectionchange', onSelectionChange);
+    ['mouseup', 'touchend'].forEach(evt =>
+      document.addEventListener(evt, onPointerUp)
+    );
     document.addEventListener('mousedown', onClickOutside);
     document.addEventListener('touchstart', onClickOutside, { passive: true });
     return () => {
       document.removeEventListener('selectionchange', onSelectionChange);
+      ['mouseup', 'touchend'].forEach(evt =>
+        document.removeEventListener(evt, onPointerUp)
+      );
       document.removeEventListener('mousedown', onClickOutside);
       document.removeEventListener('touchstart', onClickOutside);
       clearTimeout(selTimerRef.current);
@@ -295,13 +300,15 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     setCurrentSentence(idx);
     // 存当前句文本用于精确标亮
     setCurrentChunkText(chunks[idx]);
-    // 滚动
-    const el = contentRef.current;
-    if (el) {
-      let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
-      const total = chunks.reduce((s,t)=>s+t.length,0)||1;
-      el.scrollTop = (cc / total) * (el.scrollHeight - el.clientHeight);
-    }
+    // [FIX-1] rAF 解耦滚动与朗读事件，防止同步 layout 抖动
+    let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
+    requestAnimationFrame(() => {
+      const el = contentRef.current;
+      if (el) {
+        const total = chunks.reduce((s,t)=>s+t.length,0)||1;
+        el.scrollTop = (cc / total) * (el.scrollHeight - el.clientHeight);
+      }
+    });
 
     const curGen = ttsGenRef.current;
     const u = new SpeechSynthesisUtterance(chunks[idx]);
@@ -321,11 +328,14 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     ttsIdxRef.current = idx; setCurrentSentence(idx);
     let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
     setCurrentChunkText(chunks[idx]);
-    const el = contentRef.current;
-    if (el) {
-      const total = chunks.reduce((s,t)=>s+t.length,0)||1;
-      el.scrollTop = (cc / total) * (el.scrollHeight - el.clientHeight);
-    }
+    // [FIX-1] rAF 解耦滚动与 fetch 事件
+    requestAnimationFrame(() => {
+      const el = contentRef.current;
+      if (el) {
+        const total = chunks.reduce((s,t)=>s+t.length,0)||1;
+        el.scrollTop = (cc / total) * (el.scrollHeight - el.clientHeight);
+      }
+    });
 
     const abort = new AbortController(); ttsAbortRef.current = abort;
     const curGen = ttsGenRef.current;
@@ -357,9 +367,12 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     ttsChunksRef.current = chunks;
     isSpeakingRef.current = true;
     setTtsState('playing');
+    // [FIX-1] rAF 确保 DOM 分句渲染完毕后再开始朗读
     const gen = ttsGenRef.current;
     const fn = isMobile ? playCloud : speakLocal;
-    fn(Math.min(fromIdx, chunks.length - 1), gen);
+    requestAnimationFrame(() => {
+      fn(Math.min(fromIdx, chunks.length - 1), gen);
+    });
   }, [book?.content, stopTTS, isMobile, speakLocal, playCloud]);
 
   const handleTTS = useCallback(() => {
@@ -390,7 +403,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
   useEffect(() => () => { isSpeakingRef.current = false; window.speechSynthesis?.cancel(); ttsAbortRef.current?.abort(); }, []);
 
-  // ── 确认标注 ──
+  // [FIX-2] 标注后立即持久化到 IndexedDB，不等 auto-save
   const handleConfirmAnnotation = () => {
     if (!pendingRange || !bookId) return;
     addAnnotation(bookId, {
@@ -401,6 +414,9 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       selectedText: pendingRange.text,
       note: '',
     });
+    // 立即持久化
+    const { persist } = useStore.getState();
+    persist(true);
     setFlashId(Date.now());
     setShowToolbar(false);
     setPendingRange(null);
@@ -425,11 +441,11 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     setDeleteTarget(null);
   };
 
-  // ── 构建分段 ──
+  // [FIX-2] 根据字符偏移量重建分段，不依赖 flashId（不再通过改 key 触发重渲染）
   const segments = useMemo(() => {
     if (!book) return [];
     return buildSegments(book.content, book.annotations || []);
-  }, [book?.content, book?.annotations, flashId]);
+  }, [book?.content, book?.annotations]);
 
   if (!book) {
     return (
@@ -498,7 +514,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         className="reader-content"
         onScroll={saveProgress}
       >
-        <div className="reader-text" key={flashId || '0'}>
+        <div className="reader-text" key="reader-text-stable">
           {(() => {
             const curChunk = currentChunkText;
             const isPlaying = ttsState === 'playing' && curChunk;

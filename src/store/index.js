@@ -64,11 +64,20 @@ const useStore = create((set, get) => ({
   },
 
   // ============ 持久化 ============
+  // [FIX-3] 持久化前校验：所有数据均为空则跳过，防止覆盖云端
   persist: async (silent = false) => {
-    const { loadFailed } = get();
-    if (loadFailed) return; // 数据加载失败，禁止保存防止覆盖云端
+    const state = get();
+    if (state.loadFailed) return;
+    const isEmpty =
+      (!state.books || state.books.length === 0) &&
+      (!state.readingBooks || state.readingBooks.length === 0) &&
+      (!state.inspirationCards || state.inspirationCards.length === 0);
+    if (isEmpty) {
+      console.warn('[persist] 数据全空，跳过本次保存，防止覆盖云端数据');
+      return;
+    }
     if (!silent) set({ toast: { text: '正在保存...', ts: Date.now() } });
-    const { books, inspirationCards, aiConversations, settings, dailyCounts, trash, readingBooks } = get();
+    const { books, inspirationCards, aiConversations, settings, dailyCounts, trash, readingBooks } = state;
     const { splashImage, ...settingsWithoutSplash } = settings;
     const data = { books, inspirationCards, aiConversations, settings: settingsWithoutSplash, dailyCounts, trash, readingBooks };
     // 先写本地 IndexedDB（saveData 内部），再立即云同步（不等 15 秒防抖）
