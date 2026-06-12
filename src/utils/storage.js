@@ -18,6 +18,15 @@ function scheduleCloudSync(stamped) {
 // 立即云同步（persist 手动保存调用，不等防抖）
 export async function flushCloudSync(stamped) {
   clearTimeout(_syncTimer);
+  // [FIX] 防抖延迟触发时再次校验数据非空，防止过渡态空数据推送
+  const hasData =
+    stamped?.books?.length > 0 ||
+    stamped?.readingBooks?.length > 0 ||
+    stamped?.inspirationCards?.length > 0;
+  if (!hasData) {
+    console.warn('[flushCloudSync] 数据为空，取消本次云同步');
+    return false;
+  }
   if (_syncing) return false;
   _syncing = true;
   try {
@@ -40,6 +49,15 @@ export async function flushCloudSync(stamped) {
 // ========== 核心存储（IndexedDB为主，localStorage降级） ==========
 
 export async function saveData(key, data) {
+  // [FIX] 写入前校验，空数据不写 IndexedDB 也不推云端
+  const hasData =
+    data?.books?.length > 0 ||
+    data?.readingBooks?.length > 0 ||
+    data?.inspirationCards?.length > 0;
+  if (!hasData) {
+    console.warn('[saveData] 数据为空，跳过本次写入');
+    return;
+  }
   // 加时间戳
   const stamped = { ...data, _updatedAt: Date.now() };
   // 写入 IndexedDB（立即写，本地速度快）
@@ -92,8 +110,17 @@ export async function loadData(key) {
     return { ...cloudData, _source: 'cloud' }; // 标记数据来源，用于提示用户
   }
 
+  // [FIX] 本地推送云端前做空数据保护，防止本地空数据覆盖云端
   if (localTs > cloudTs) {
-    cloudSave(localData).catch(() => {});
+    const localHasData =
+      localData?.books?.length > 0 ||
+      localData?.readingBooks?.length > 0 ||
+      localData?.inspirationCards?.length > 0;
+    if (localHasData) {
+      cloudSave(localData).catch(() => {});
+    } else {
+      console.warn('[loadData] 本地数据为空，跳过推送云端，保留云端数据');
+    }
   }
 
   return localData;
