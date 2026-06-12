@@ -298,6 +298,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     ttsAbortRef.current?.abort();
     ttsAudioRef.current?.pause();
     ttsAudioRef.current = null;
+    clearInterval(sentenceTimerRef.current);
     window.speechSynthesis?.cancel();
     setTtsState('idle');
     setCurrentSentence(-1);
@@ -366,41 +367,72 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   // [FIX-3] 去掉 ttsSpeed 依赖——用 ref 读，避免速率变化时重建回调导致旧 onend 失效
   }, [stopTTS]);
 
-  // ── 手机端：云端 TTS fetch Audio ──
+  // ── 手机端：云端 TTS fetch Audio + 定时器模拟逐句追踪 ──
+  const sentenceTimerRef = useRef(null);
   const playCloud = useCallback(async (idx, gen) => {
     if (gen !== undefined && gen !== ttsGenRef.current) return;
     const chunks = ttsChunksRef.current;
     if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx; setCurrentSentence(idx);
     let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
-    // [FIX] 同步记录 chunk 文本和全文偏移 + 设置高亮范围（手机端之前缺失）
-    setCurrentChunkText(chunks[idx]);
-    setCurrentChunkOffset(cc);
-    setHighlightRange({ start: cc, end: cc + chunks[idx].length });
-    // [FIX-1] rAF 滚动到当前高亮句
-    requestAnimationFrame(() => {
-      const el = document.querySelector('.tts-highlight');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
+    const chunk = chunks[idx];
+    const chunkStart = cc;
+    setCurrentChunkText(chunk);
+    setCurrentChunkOffset(chunkStart);
 
     const abort = new AbortController(); ttsAbortRef.current = abort;
     const curGen = ttsGenRef.current;
     try {
-      const res = await fetch('/api/tts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:chunks[idx],rate:ttsSpeedRef.current}), signal:abort.signal });
+      const res = await fetch('/api/tts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:chunk,rate:ttsSpeedRef.current}), signal:abort.signal });
       if (!res.ok) throw new Error('fail');
       const blob = await res.blob();
       if (!isSpeakingRef.current || abort.signal.aborted || ttsGenRef.current !== curGen) return;
       const url = URL.createObjectURL(blob);
       const a = new Audio(url);
-      a.onended = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current && ttsGenRef.current === curGen) playCloud(idx + 1, curGen); };
-      a.onerror = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current && ttsGenRef.current === curGen) playCloud(idx + 1, curGen); };
+
+      // [FIX] 定时器模拟 onboundary：按语速估算当前读到哪句
+      const charsPerMs = (ttsSpeedRef.current || 1) * 5 / 1000; // ~5字/秒 基准
+      const startTime = Date.now();
+      const updateSentence = () => {
+        if (!isSpeakingRef.current || ttsGenRef.current !== curGen) return;
+        const elapsed = Date.now() - startTime;
+        const charPos = Math.min(Math.floor(elapsed * charsPerMs), chunk.length);
+        // 往前找句号 → 当前句起始
+        let s = 0;
+        for (let i = charPos - 1; i >= 0; i--) { if (/[。！？\n]/.test(chunk[i])) { s = i + 1; break; } }
+        // 往后找句号 → 当前句结束
+        let e = chunk.length;
+        for (let i = charPos; i < chunk.length; i++) { if (/[。！？\n]/.test(chunk[i])) { e = i + 1; break; } }
+        setHighlightRange({ start: chunkStart + s, end: chunkStart + e });
+        requestAnimationFrame(() => {
+          const el = document.querySelector('.tts-highlight');
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      };
+      updateSentence();
+      sentenceTimerRef.current = setInterval(updateSentence, 400);
+
+      a.onended = () => {
+        clearInterval(sentenceTimerRef.current);
+        URL.revokeObjectURL(url);
+        if (isSpeakingRef.current && ttsGenRef.current === curGen) playCloud(idx + 1, curGen);
+      };
+      a.onerror = () => {
+        clearInterval(sentenceTimerRef.current);
+        URL.revokeObjectURL(url);
+        if (isSpeakingRef.current && ttsGenRef.current === curGen) playCloud(idx + 1, curGen);
+      };
       ttsAudioRef.current = a;
-      a.play().catch(() => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playCloud(idx + 1, curGen); });
+      a.play().catch(() => {
+        clearInterval(sentenceTimerRef.current);
+        URL.revokeObjectURL(url);
+        if (isSpeakingRef.current) playCloud(idx + 1, curGen);
+      });
     } catch (e) {
+      clearInterval(sentenceTimerRef.current);
       if (abort.signal.aborted || ttsGenRef.current !== curGen) return;
       if (isSpeakingRef.current) { await new Promise(r=>setTimeout(r,500)); if (isSpeakingRef.current && ttsGenRef.current === curGen) playCloud(idx, curGen); }
     }
-  // [FIX-1] playCloud 去 ttsSpeed 依赖，用 ref 读速率
   }, [stopTTS]);
 
   const startTTS = useCallback((fromIdx = 0) => {
