@@ -392,17 +392,20 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       const url = URL.createObjectURL(blob);
       const a = new Audio(url);
 
-      // [FIX] 定时器模拟 onboundary：按语速估算当前读到哪句
-      const charsPerMs = (ttsSpeedRef.current || 1) * 5 / 1000; // ~5字/秒 基准
+      // [FIX] 用音频真实时长校准语速，不再写死 5字/秒
+      let charsPerMs = (ttsSpeedRef.current || 1) * 3 / 1000; // 兜底 ~3字/秒
+      a.onloadedmetadata = () => {
+        if (a.duration && a.duration > 0.5) {
+          charsPerMs = chunk.length / (a.duration * 1000);
+        }
+      };
       const startTime = Date.now();
       const updateSentence = () => {
         if (!isSpeakingRef.current || ttsGenRef.current !== curGen) return;
         const elapsed = Date.now() - startTime;
         const charPos = Math.min(Math.floor(elapsed * charsPerMs), chunk.length);
-        // 往前找句号 → 当前句起始
         let s = 0;
         for (let i = charPos - 1; i >= 0; i--) { if (/[。！？\n]/.test(chunk[i])) { s = i + 1; break; } }
-        // 往后找句号 → 当前句结束
         let e = chunk.length;
         for (let i = charPos; i < chunk.length; i++) { if (/[。！？\n]/.test(chunk[i])) { e = i + 1; break; } }
         setHighlightRange({ start: chunkStart + s, end: chunkStart + e });
