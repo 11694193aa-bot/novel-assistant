@@ -252,48 +252,42 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     return () => window.removeEventListener('keydown', h);
   }, [isMobile]);
 
-  // ── Edge TTS 引擎（fetch → Audio 播放）─────────────────
-  const ttsAudioRef = useRef(null);      // 当前 Audio 元素
-  const ttsNextAudioRef = useRef(null);  // 预缓冲的下一段
-  const ttsAbortRef = useRef(null);      // AbortController
+  // ── TTS 引擎（Edge TTS → fallback Web Speech）──────────
+  const ttsAudioRef = useRef(null);
+  const ttsAbortRef = useRef(null);
+  const ttsRetryRef = useRef(0);
 
   const stopTTS = useCallback(() => {
     ttsAbortRef.current?.abort();
     ttsAudioRef.current?.pause();
     ttsAudioRef.current = null;
-    ttsNextAudioRef.current = null;
+    window.speechSynthesis?.cancel();
     isSpeakingRef.current = false;
     setTtsState('idle');
     setCurrentSentence(-1);
   }, []);
 
-  // 获取一段音频（带重试）
-  const fetchAudio = useCallback(async (text, voice, rate, signal) => {
-    let lastErr;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const res = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, voice, rate }),
-          signal,
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
-        return URL.createObjectURL(blob);
-      } catch (e) {
-        lastErr = e;
-        if (signal?.aborted) throw e;
-        if (attempt === 0) await new Promise(r => setTimeout(r, 500));
-      }
+  // 用 Edge TTS 获取一段音频
+  const fetchEdgeAudio = useCallback(async (text, voice, rate, signal) => {
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice, rate }),
+      signal,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
     }
-    throw lastErr;
+    const blob = await res.blob();
+    if (blob.size < 100) throw new Error('audio too small');
+    return URL.createObjectURL(blob);
   }, []);
 
-  // 播放指定块
-  const playChunk = useCallback((idx) => {
+  // 播放指定块（Edge TTS 优先，失败则用 Web Speech 兜底）
+  const playChunk = useCallback((idx, useEdge = true) => {
     const chunks = ttsChunksRef.current;
-    if (idx >= chunks.length) { stopTTS(); return; }
+    if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx;
     setCurrentSentence(idx);
 
@@ -304,55 +298,38 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     const el = contentRef.current;
     if (el) el.scrollTop = (cc / (total || 1)) * (el.scrollHeight - el.clientHeight);
 
-    const audio = ttsNextAudioRef.current;
-    ttsNextAudioRef.current = null;
-    ttsAudioRef.current = audio;
-
-    if (!audio) {
-      // 没有预缓冲，直接请求
+    if (useEdge) {
       const abort = new AbortController();
       ttsAbortRef.current = abort;
-      fetchAudio(chunks[idx], ttsVoiceRef.current, ttsSpeed, abort.signal).then(url => {
-        if (!isSpeakingRef.current) { URL.revokeObjectURL(url); return; }
-        const a = new Audio(url);
-        a.onended = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playChunk(idx + 1); };
-        a.onerror = () => { URL.revokeObjectURL(url); if (isSpeakingRef.current) playChunk(idx + 1); };
-        a.play().catch(() => { if (isSpeakingRef.current) playChunk(idx + 1); });
-        ttsAudioRef.current = a;
-      }).catch(() => { if (isSpeakingRef.current) playChunk(idx + 1); });
-      // 预缓冲下一段
-      if (idx + 1 < chunks.length) {
-        const nextAbort = new AbortController();
-        fetchAudio(chunks[idx + 1], ttsVoiceRef.current, ttsSpeed, nextAbort.signal).then(url => {
-          if (isSpeakingRef.current) {
-            const a = new Audio(url);
-            a.preload = 'auto';
-            a.onerror = () => URL.revokeObjectURL(url);
-            ttsNextAudioRef.current = a;
-          } else { URL.revokeObjectURL(url); }
-        }).catch(() => {});
-      }
+      fetchEdgeAudio(chunks[idx], ttsVoiceRef.current, ttsSpeed, abort.signal)
+        .then(url => {
+          if (!isSpeakingRef.current) { URL.revokeObjectURL(url); return; }
+          const a = new Audio(url);
+          a.onended = () => { URL.revokeObjectURL(url); playChunk(idx + 1, true); };
+          a.onerror = () => { URL.revokeObjectURL(url); playChunk(idx + 1, true); };
+          a.play().catch(() => { URL.revokeObjectURL(url); playChunk(idx + 1, true); });
+          ttsAudioRef.current = a;
+        })
+        .catch(() => {
+          // Edge TTS 失败 → 静默降级到 Web Speech
+          if (!isSpeakingRef.current) return;
+          playChunk(idx, false);
+        });
       return;
     }
 
-    // 用预缓冲的 audio
-    audio.onended = () => { if (isSpeakingRef.current) playChunk(idx + 1); };
-    audio.onerror = () => { if (isSpeakingRef.current) playChunk(idx + 1); };
-    audio.play().catch(() => { if (isSpeakingRef.current) playChunk(idx + 1); });
-
-    // 预缓冲下一段
-    if (idx + 1 < chunks.length) {
-      const nextAbort = new AbortController();
-      fetchAudio(chunks[idx + 1], ttsVoiceRef.current, ttsSpeed, nextAbort.signal).then(url => {
-        if (isSpeakingRef.current) {
-          const a = new Audio(url);
-          a.preload = 'auto';
-          a.onerror = () => URL.revokeObjectURL(url);
-          ttsNextAudioRef.current = a;
-        } else { URL.revokeObjectURL(url); }
-      }).catch(() => {});
-    }
-  }, [ttsSpeed, stopTTS, fetchAudio]);
+    // Web Speech 兜底
+    const utter = new SpeechSynthesisUtterance(chunks[idx]);
+    utter.lang = 'zh-CN';
+    utter.rate = ttsSpeed;
+    utter.volume = 1.0;
+    const voices = window.speechSynthesis.getVoices();
+    const zh = voices.find(v => v.lang.startsWith('zh'));
+    if (zh) utter.voice = zh;
+    utter.onend = () => { if (isSpeakingRef.current) playChunk(idx + 1, false); };
+    utter.onerror = () => { if (isSpeakingRef.current) playChunk(idx + 1, false); };
+    window.speechSynthesis.speak(utter);
+  }, [ttsSpeed, stopTTS, fetchEdgeAudio]);
 
   const startTTS = useCallback((fromIdx = 0) => {
     if (!book?.content) return;
@@ -363,26 +340,28 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     let buf = '';
     for (const s of raw) {
       buf += s;
-      if (buf.length >= 300) { chunks.push(buf); buf = ''; }
+      if (buf.length >= 250) { chunks.push(buf); buf = ''; }
     }
     if (buf.trim()) chunks.push(buf);
     ttsChunksRef.current = chunks;
     ttsIdxRef.current = Math.min(fromIdx, chunks.length - 1);
     isSpeakingRef.current = true;
     setTtsState('playing');
-    playChunk(ttsIdxRef.current);
+    playChunk(ttsIdxRef.current, true);
   }, [book?.content, stopTTS, playChunk]);
 
   const handleTTS = useCallback(() => {
     if (ttsState === 'playing') {
       ttsAudioRef.current?.pause();
       ttsAbortRef.current?.abort();
+      window.speechSynthesis?.pause();
       setTtsState('paused');
       isSpeakingRef.current = false;
     } else if (ttsState === 'paused') {
       isSpeakingRef.current = true;
       setTtsState('playing');
-      ttsAudioRef.current?.play().catch(() => {});
+      const a = ttsAudioRef.current;
+      if (a) { a.play().catch(() => {}); } else { window.speechSynthesis?.resume(); }
     } else {
       startTTS(0);
     }
@@ -394,13 +373,11 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     setTtsVoice(voiceName);
     ttsVoiceRef.current = voiceName;
     if (!isSpeakingRef.current) return;
-    // 正在播放且切语音 → 从当前块用新语音重启
     const curIdx = ttsIdxRef.current;
     stopTTS();
-    setTimeout(() => startTTS(curIdx), 100);
+    setTimeout(() => startTTS(curIdx), 150);
   }, [stopTTS, startTTS]);
 
-  // 卸载时清理
   useEffect(() => () => stopTTS(), [stopTTS]);
 
   // ── 确认标注 ──
