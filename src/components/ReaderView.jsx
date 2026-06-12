@@ -240,7 +240,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       if (zh.length > 0) {
         setSysVoices(zh);
         sysVoicesRef.current = zh;
-        if (!ttsVoice) {
+        // 用 ref 判断避免闭包过期 → 已选语音不会被重置
+        if (!ttsVoiceRef.current) {
           setTtsVoice(zh[0].name);
           ttsVoiceRef.current = zh[0].name;
         }
