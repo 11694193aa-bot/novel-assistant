@@ -44,7 +44,7 @@ function FunMenu({ onClose, onAction }) {
         <div className="ms-fun-grid">
           {funMenuItems.map((item) => (
             <button key={item.key} className="ms-fun-card" onClick={() => onAction(item.key)}>
-              <span className="ms-fun-card-icon"><CatIcon name={item.icon} size={28} /></span>
+              <span className="ms-fun-card-icon"><CatIconButton name={item.icon} size={28} /></span>
               <span className="ms-fun-card-label">{item.label}</span>
             </button>
           ))}
