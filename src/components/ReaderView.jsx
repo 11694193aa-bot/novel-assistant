@@ -264,7 +264,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     setCurrentSentence(idx);
     let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
     const el = contentRef.current;
-    if (el) el.scrollTop = (cc / (chunks.reduce((s,t)=>s+t.length,0)||1)) * (el.scrollHeight - el.clientHeight);
+    if (el) el.scrollTo({ top: (cc / (chunks.reduce((s,t)=>s+t.length,0)||1)) * (el.scrollHeight - el.clientHeight), behavior: 'smooth' });
 
     const curGen = ttsGenRef.current;
     const u = new SpeechSynthesisUtterance(chunks[idx]);
@@ -284,7 +284,7 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     ttsIdxRef.current = idx; setCurrentSentence(idx);
     let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
     const el = contentRef.current;
-    if (el) el.scrollTop = (cc / (chunks.reduce((s,t)=>s+t.length,0)||1)) * (el.scrollHeight - el.clientHeight);
+    if (el) el.scrollTo({ top: (cc / (chunks.reduce((s,t)=>s+t.length,0)||1)) * (el.scrollHeight - el.clientHeight), behavior: 'smooth' });
 
     const abort = new AbortController(); ttsAbortRef.current = abort;
     const curGen = ttsGenRef.current;
