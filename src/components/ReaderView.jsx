@@ -410,9 +410,10 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     });
   }, [book?.content, stopTTS, isMobile, speakLocal, playCloud]);
 
+  // [FIX-2] 移动端暂停只pause不abort（abort只在stopTTS里做）
   const handleTTS = useCallback(() => {
     if (ttsState === 'playing') {
-      if (isMobile) { ttsAbortRef.current?.abort(); ttsAudioRef.current?.pause(); }
+      if (isMobile) { ttsAudioRef.current?.pause(); }
       else { isSpeakingRef.current = false; window.speechSynthesis?.pause(); }
       setTtsState('paused');
     } else if (ttsState === 'paused') {
