@@ -115,10 +115,15 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [deleteTarget, setDeleteTarget] = useState(null); // 待删除标注 id
   const [ttsState, setTtsState] = useState('idle'); // idle | playing | paused
   const [ttsSpeed, setTtsSpeed] = useState(1);
+  const [ttsVoice, setTtsVoice] = useState(null);
+  const ttsVoiceRef = useRef(null);
+  const [sysVoices, setSysVoices] = useState([]);
+  const sysVoicesRef = useRef([]);
   const [currentSentence, setCurrentSentence] = useState(-1);
   const progressRestored = useRef(false);
 
   useEffect(() => { progressRestored.current = false; }, [bookId]);
+  useEffect(() => { ttsVoiceRef.current = ttsVoice; }, [ttsVoice]);
 
   // 切换书籍时停止朗读
   useEffect(() => {
@@ -227,8 +232,9 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
         setSysVoices(zh);
         sysVoicesRef.current = zh;
         if (!ttsVoiceRef.current) {
-          setTtsVoice(zh[0].name);
-          ttsVoiceRef.current = zh[0].name;
+          const yun = zh.find(v => /yunyang|云扬/i.test(v.name)) || zh[0];
+          setTtsVoice(yun.name);
+          ttsVoiceRef.current = yun.name;
         }
       }
     };

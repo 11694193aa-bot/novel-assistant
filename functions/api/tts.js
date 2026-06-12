@@ -6,7 +6,7 @@
 // ── Edge TTS ────────────────────────────────────────────
 async function tryEdgeTTS(text, rate) {
   const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="zh-CN"><voice name="zh-CN-XiaoxiaoNeural"><prosody rate="${rate || 1}" pitch="+0Hz">${safe}</prosody></voice></speak>`;
+  const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="zh-CN"><voice name="zh-CN-YunyangNeural"><prosody rate="${rate || 1}" pitch="+0Hz">${safe}</prosody></voice></speak>`;
   const token = Date.now().toString(36) + Math.random().toString(36).slice(2,10);
 
   const res = await fetch(`https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${token}`, {
