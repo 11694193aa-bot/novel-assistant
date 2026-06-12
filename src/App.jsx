@@ -292,7 +292,7 @@ export default function App() {
 
         {/* 阅读全屏页 */}
         {activeTab === 'reading' && !readerBookId && (
-          <MobileFullPage title="阅读" onBack={() => navigateTab('directory')}>
+          <MobileFullPage title="阅读">
             <ReadingBookList isMobile onOpenReader={(id) => setReaderBookId(id)} />
           </MobileFullPage>
         )}

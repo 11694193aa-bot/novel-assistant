@@ -5,7 +5,7 @@ export default function MobileFullPage({ title, count, onBack, children, actions
   return (
     <div className="ms-fullpage">
       <div className="ms-thin-bar">
-        <button className="ms-back-btn" onClick={onBack}>‹</button>
+        {onBack && <button className="ms-back-btn" onClick={onBack}>‹</button>}
         <span className="ms-thin-title">{title}</span>
         {count !== undefined && <span className="ms-thin-count">{count}张</span>}
         {actions ? <div className="ms-header-actions">{actions}</div> : <span style={{width:24}} />}
