@@ -93,7 +93,8 @@ function splitSentences(text) {
     }
   }
   if (buf.trim()) sentences.push(buf);
-  return sentences.filter(s => s.trim());
+  // [FIX-3] 只过滤真正的空串，保留含空白字符的句子
+  return sentences.filter(s => s.length > 0);
 }
 
 // ─── 组件 ─────────────────────────────────────────────────
@@ -395,7 +396,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
       if (abort.signal.aborted || ttsGenRef.current !== curGen) return;
       if (isSpeakingRef.current) { await new Promise(r=>setTimeout(r,500)); if (isSpeakingRef.current && ttsGenRef.current === curGen) playCloud(idx, curGen); }
     }
-  }, [ttsSpeed, stopTTS]);
+  // [FIX-1] playCloud 去 ttsSpeed 依赖，用 ref 读速率
+  }, [stopTTS]);
 
   const startTTS = useCallback((fromIdx = 0) => {
     if (!book?.content) return;
@@ -443,7 +445,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     if (!isSpeakingRef.current) return;
     const cur = ttsIdxRef.current;
     stopTTS();
-    setTimeout(() => { if (!isSpeakingRef.current) return; isSpeakingRef.current = true; setTtsState('playing'); startTTS(cur); }, 100);
+    // [FIX-2] 去掉 isSpeakingRef 预检查，让 startTTS 里的 stopTTS 统一处理
+    setTimeout(() => { isSpeakingRef.current = true; setTtsState('playing'); startTTS(cur); }, 100);
   }, [stopTTS, startTTS]);
 
   useEffect(() => () => { isSpeakingRef.current = false; window.speechSynthesis?.cancel(); ttsAbortRef.current?.abort(); }, []);

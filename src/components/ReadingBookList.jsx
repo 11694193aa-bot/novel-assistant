@@ -7,6 +7,8 @@ export default function ReadingBookList({ isMobile, onSelectBook, onOpenReader }
   const { readingBooks, addReadingBook, deleteReadingBook, renameReadingBook, setReadingBookCover, markDirty, persist } = useStore();
   const [importing, setImporting] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  // [FIX-5] 长按 timer 用 ref 避免挂载在 DOM 上
+  const longPressRef = useRef(null);
   const fileRef = useRef(null);
   const coverInputRef = useRef(null);
 
@@ -29,8 +31,10 @@ export default function ReadingBookList({ isMobile, onSelectBook, onOpenReader }
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
+    // [FIX-4] 设置封面后立即持久化
     reader.onload = () => {
       setReadingBookCover(bookId, reader.result);
+      persist();
     };
     reader.readAsDataURL(file);
     if (coverInputRef.current) coverInputRef.current.value = '';
@@ -103,12 +107,10 @@ export default function ReadingBookList({ isMobile, onSelectBook, onOpenReader }
               className="reading-book-card"
               onClick={() => { if (!editingId && onOpenReader) onOpenReader(b.id); }}
               onContextMenu={(e) => { e.preventDefault(); setEditingId(b.id); }}
-              onTouchStart={(e) => {
-                const timer = setTimeout(() => setEditingId(b.id), 600);
-                e.currentTarget._longPress = timer;
-              }}
-              onTouchEnd={(e) => { clearTimeout(e.currentTarget._longPress); }}
-              onTouchMove={(e) => { clearTimeout(e.currentTarget._longPress); }}
+              // [FIX-5] 长按 timer 存 ref，不再挂 DOM 属性
+              onTouchStart={() => { longPressRef.current = setTimeout(() => setEditingId(b.id), 600); }}
+              onTouchEnd={() => clearTimeout(longPressRef.current)}
+              onTouchMove={() => clearTimeout(longPressRef.current)}
             >
               {/* 封面 — 点击换封面 */}
               <div

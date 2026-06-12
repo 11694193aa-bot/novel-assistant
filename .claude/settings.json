@@ -124,7 +124,12 @@
       "Bash(cat src/utils/importBook.js)",
       "Bash(echo \"\")",
       "Bash(echo \"===== ReadingBookList.jsx =====\")",
-      "Bash(echo \"===== importBook.js =====\")"
+      "Bash(echo \"===== importBook.js =====\")",
+      "Bash(echo \"===== MobileFullPage.jsx =====\")",
+      "Bash(head -10)",
+      "Bash(echo \"===== functions/api/tts.js \\(手机端TTS代理\\) =====\")",
+      "Bash(cat functions/api/tts.js)",
+      "Bash(echo \"===== App.css 阅读样式 =====\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\11694\\AppData\\Local\\Temp",
