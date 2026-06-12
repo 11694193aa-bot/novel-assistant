@@ -349,7 +349,7 @@ export default function MobileStack({
         return (
           <div className="ms-page" key="books">
             <div className="ms-header">
-              <CatIcon name="books" size={22} />
+              <CatIconButton name="books" size={22} />
               <h1 className="ms-header-title">我的书架</h1>
               <button className="ms-header-btn" onClick={() => { setBookBatchMode(!bookBatchMode); setSelectedBooks(new Set()); }}
                 style={{background:bookBatchMode?'var(--pink)':'var(--pink3)',color:bookBatchMode?'#fff':'var(--text)',fontSize:18}}>
