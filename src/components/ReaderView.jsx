@@ -506,8 +506,10 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
               const segEnd = charPos + seg.text.length;
               charPos = segEnd;
               // 只有当前句文本包含此段时才标亮（排除大段包含当前句的情况）
+              // 不含中文的段（换行/空格/标点）不标亮
               const curText = currentChunkTextRef.current;
-              const isCurrentTTS = ttsState === 'playing' && curText &&
+              const hasChinese = /[一-鿿]/.test(seg.text);
+              const isCurrentTTS = ttsState === 'playing' && curText && hasChinese &&
                 seg.text.length < curText.length && curText.includes(seg.text);
               if (!seg.annotation) {
                 return <span key={i} className={isCurrentTTS ? 'tts-highlight' : ''}>{seg.text}</span>;
