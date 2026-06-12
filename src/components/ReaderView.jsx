@@ -505,10 +505,10 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
               const segStart = charPos;
               const segEnd = charPos + seg.text.length;
               charPos = segEnd;
-              // 精确匹配：当前句文本包含此段文字 或 此段文字包含当前句
+              // 只有当前句文本包含此段时才标亮（排除大段包含当前句的情况）
               const curText = currentChunkTextRef.current;
               const isCurrentTTS = ttsState === 'playing' && curText &&
-                (curText.includes(seg.text) || seg.text.includes(curText.slice(0, 30)));
+                seg.text.length < curText.length && curText.includes(seg.text);
               if (!seg.annotation) {
                 return <span key={i} className={isCurrentTTS ? 'tts-highlight' : ''}>{seg.text}</span>;
               }
