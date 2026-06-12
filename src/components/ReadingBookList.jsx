@@ -15,10 +15,9 @@ export default function ReadingBookList({ isMobile, onSelectBook, onOpenReader }
     setImporting(true);
     try {
       const bookData = await importBookFile(file);
-      const book = addReadingBook(bookData);
+      addReadingBook(bookData);
       persist();
-      // 导入完成后直接打开阅读
-      if (onOpenReader) onOpenReader(book.id);
+      // 导入完成后显示在书单中，用户点击封面再进入阅读
     } catch (err) {
       alert('导入失败：' + err.message);
     }

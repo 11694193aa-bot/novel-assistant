@@ -142,28 +142,42 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     setTimeout(() => { el.scrollTop = ratio * (el.scrollHeight - el.clientHeight); }, 300);
   }, [book?.readingProgress, book?.content]);
 
-  // ── selectionchange 驱动工具栏 ──
+  // ── selectionchange 驱动工具栏（防抖避免闪烁）──
+  const selTimerRef = useRef(null);
+  const prevSelTextRef = useRef('');
   useEffect(() => {
     const onSelectionChange = () => {
-      const offsets = getSelectionOffsets(contentRef.current);
-      if (offsets && offsets.text.trim()) {
-        setPendingRange(offsets);
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0) {
-          const rect = sel.getRangeAt(0).getBoundingClientRect();
-          setToolbarPos({
-            x: Math.min(rect.left + rect.width / 2, window.innerWidth - 200),
-            y: Math.max(rect.top - 56, 20),
-          });
+      clearTimeout(selTimerRef.current);
+      selTimerRef.current = setTimeout(() => {
+        const offsets = getSelectionOffsets(contentRef.current);
+        const curText = (offsets && offsets.text.trim()) || '';
+        const prevText = prevSelTextRef.current;
+        // 只有选区文字真正变化时才更新状态
+        if (curText === prevText) return;
+        prevSelTextRef.current = curText;
+
+        if (curText) {
+          setPendingRange(offsets);
+          const sel = window.getSelection();
+          if (sel && sel.rangeCount > 0) {
+            const rect = sel.getRangeAt(0).getBoundingClientRect();
+            setToolbarPos({
+              x: Math.min(rect.left + rect.width / 2, window.innerWidth - 200),
+              y: Math.max(rect.top - 56, 20),
+            });
+          }
+          setShowToolbar(true);
+        } else {
+          setShowToolbar(false);
+          setPendingRange(null);
         }
-        setShowToolbar(true);
-      } else {
-        setShowToolbar(false);
-        setPendingRange(null);
-      }
+      }, 150); // 150ms 防抖
     };
     document.addEventListener('selectionchange', onSelectionChange);
-    return () => document.removeEventListener('selectionchange', onSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', onSelectionChange);
+      clearTimeout(selTimerRef.current);
+    };
   }, []);
 
   // ── Esc 关闭 ──
