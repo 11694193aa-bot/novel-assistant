@@ -296,34 +296,30 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     setCurrentSentence(-1);
   }, [stopAutoScroll]);
 
-  // ── 桌面端：SpeechSynthesis 逐块播放 ──
-  const speakLocal = useCallback((idx, gen) => {
-    if (gen !== undefined && gen !== ttsGenRef.current) return; // 过期回调
-    const chunks = ttsChunksRef.current;
-    if (idx >= chunks.length || !isSpeakingRef.current) { stopTTS(); return; }
+  // ── 桌面端：逐句朗读（每句一个 utterance）──
+  const speakLocal = useCallback((sentences, idx, curGen) => {
+    if (ttsGenRef.current !== curGen) return;
+    if (idx >= sentences.length || !isSpeakingRef.current) { stopTTS(); return; }
     ttsIdxRef.current = idx;
+    const sentence = sentences[idx];
     setCurrentSentence(idx);
-    // [FIX] 同步记录 chunk 文本和全文偏移
-    setCurrentChunkText(chunks[idx]);
-    // 计算当前 chunk 在全文的字符偏移
-    let cc = 0; for (let j = 0; j < idx; j++) cc += chunks[j].length;
-    setCurrentChunkOffset(cc);
-    // [FIX-1] rAF 解耦滚动与朗读事件，防止同步 layout 抖动
+    // [FIX] 逐句：currentChunkText 就是单句（~20字），偏移按句子累加
+    setCurrentChunkText(sentence);
+    let offset = 0;
+    for (let j = 0; j < idx; j++) offset += sentences[j].length;
+    setCurrentChunkOffset(offset);
+    // [FIX-1] rAF 滚动到当前高亮句
     requestAnimationFrame(() => {
-      const el = contentRef.current;
-      if (el) {
-        const total = chunks.reduce((s,t)=>s+t.length,0)||1;
-        el.scrollTop = (cc / total) * (el.scrollHeight - el.clientHeight);
-      }
+      const el = document.querySelector('.tts-highlight');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 
-    const curGen = ttsGenRef.current;
-    const u = new SpeechSynthesisUtterance(chunks[idx]);
+    const u = new SpeechSynthesisUtterance(sentence);
     u.lang = 'zh-CN'; u.rate = ttsSpeed; u.volume = 1;
     const v = sysVoicesRef.current.find(v => v.name === ttsVoiceRef.current) || sysVoicesRef.current[0];
     if (v) u.voice = v;
-    u.onend = () => { if (isSpeakingRef.current && ttsGenRef.current === curGen) speakLocal(idx + 1, curGen); };
-    u.onerror = () => { if (isSpeakingRef.current && ttsGenRef.current === curGen) speakLocal(idx + 1, curGen); };
+    u.onend = () => { if (isSpeakingRef.current && ttsGenRef.current === curGen) speakLocal(sentences, idx + 1, curGen); };
+    u.onerror = (e) => { if (e.error !== 'interrupted' && isSpeakingRef.current && ttsGenRef.current === curGen) speakLocal(sentences, idx + 1, curGen); };
     window.speechSynthesis.speak(u);
   }, [ttsSpeed, stopTTS]);
 
@@ -337,13 +333,10 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     // [FIX] 同步记录 chunk 文本和全文偏移
     setCurrentChunkText(chunks[idx]);
     setCurrentChunkOffset(cc);
-    // [FIX-1] rAF 解耦滚动与 fetch 事件
+    // [FIX-1] rAF 滚动到当前高亮句
     requestAnimationFrame(() => {
-      const el = contentRef.current;
-      if (el) {
-        const total = chunks.reduce((s,t)=>s+t.length,0)||1;
-        el.scrollTop = (cc / total) * (el.scrollHeight - el.clientHeight);
-      }
+      const el = document.querySelector('.tts-highlight');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 
     const abort = new AbortController(); ttsAbortRef.current = abort;
@@ -368,19 +361,29 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const startTTS = useCallback((fromIdx = 0) => {
     if (!book?.content) return;
     stopTTS();
-    const chunks = [], raw = splitSentences(book.content);
-    let buf = '';
-    const limit = isMobile ? 180 : 300;
-    for (const s of raw) { buf += s; if (buf.length >= limit) { chunks.push(buf); buf = ''; } }
-    if (buf.trim()) chunks.push(buf);
-    ttsChunksRef.current = chunks;
+    const raw = splitSentences(book.content);
+    // [FIX] 桌面端用单句数组逐句播放，手机端仍拼 chunk
+    if (isMobile) {
+      const chunks = [];
+      let buf = '';
+      for (const s of raw) { buf += s; if (buf.length >= 180) { chunks.push(buf); buf = ''; } }
+      if (buf.trim()) chunks.push(buf);
+      ttsChunksRef.current = chunks;
+    } else {
+      ttsChunksRef.current = raw;
+    }
     isSpeakingRef.current = true;
     setTtsState('playing');
-    // [FIX-1] rAF 确保 DOM 分句渲染完毕后再开始朗读
     const gen = ttsGenRef.current;
-    const fn = isMobile ? playCloud : speakLocal;
+    // [FIX-1] rAF 确保 DOM 分句渲染完毕后再开始朗读
     requestAnimationFrame(() => {
-      fn(Math.min(fromIdx, chunks.length - 1), gen);
+      if (isMobile) {
+        const chunks = ttsChunksRef.current;
+        playCloud(Math.min(fromIdx, chunks.length - 1), gen);
+      } else {
+        const sentences = ttsChunksRef.current;
+        speakLocal(sentences, Math.min(fromIdx, sentences.length - 1), gen);
+      }
     });
   }, [book?.content, stopTTS, isMobile, speakLocal, playCloud]);
 
