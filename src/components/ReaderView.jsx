@@ -115,6 +115,8 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   const [flashId, setFlashId] = useState(null);
   const [ttsState, setTtsState] = useState('idle'); // idle | playing | paused
   const [ttsSpeed, setTtsSpeed] = useState(1);
+  const [ttsVoice, setTtsVoice] = useState(null);   // 选中的语音名
+  const [availableVoices, setAvailableVoices] = useState([]);
   const [currentSentence, setCurrentSentence] = useState(-1);
   const progressRestored = useRef(false);
 
@@ -124,6 +126,22 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
   useEffect(() => {
     return () => { window.speechSynthesis?.cancel(); setTtsState('idle'); };
   }, [bookId]);
+
+  // ── 加载可用语音列表 ──
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        setAvailableVoices(voices);
+        // 默认选中第一个中文语音
+        const zh = voices.find(v => v.lang.startsWith('zh'));
+        if (zh && !ttsVoice) setTtsVoice(zh.name);
+      }
+    };
+    loadVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+  }, []);
 
   // ── 滚动时保存进度 ──
   const saveProgress = useCallback(() => {
@@ -225,9 +243,10 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
     utter.lang = 'zh-CN';
     utter.rate = ttsSpeed;
     utter.volume = 0.9;
-    // 尝试选中文语音
+    // 使用用户选择的语音
     const voices = window.speechSynthesis.getVoices();
-    const zhVoice = voices.find(v => v.lang.startsWith('zh')) || voices[0];
+    const picked = voices.find(v => v.name === ttsVoice);
+    const zhVoice = picked || voices.find(v => v.lang.startsWith('zh')) || voices[0];
     if (zhVoice) utter.voice = zhVoice;
 
     utter.onend = () => {
@@ -340,6 +359,28 @@ export default function ReaderView({ bookId, onBack, isMobile }) {
 
         {/* TTS 控制区 */}
         <div className="reader-tts-group">
+          {/* 语音选择器（始终可见） */}
+          {availableVoices.length > 0 && (
+            <select
+              className="tts-voice-select"
+              value={ttsVoice || ''}
+              onChange={(e) => setTtsVoice(e.target.value)}
+              title="选择语音"
+            >
+              {availableVoices
+                .filter(v => v.lang.startsWith('zh'))
+                .map(v => (
+                  <option key={v.name} value={v.name}>{v.name.replace(/Microsoft\s*/i,'').replace(/\(.*\)/,'').trim()}</option>
+                ))}
+              {availableVoices.some(v => !v.lang.startsWith('zh')) && (
+                <optgroup label="其他语言">
+                  {availableVoices.filter(v => !v.lang.startsWith('zh')).map(v => (
+                    <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          )}
           {ttsState !== 'idle' && (
             <>
               <select

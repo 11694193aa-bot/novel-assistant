@@ -2626,12 +2626,16 @@ button.focus-float-exit,
 .tts-stop-btn {
   font-size: 12px; font-weight: 700;
 }
-.tts-speed-select {
+.tts-speed-select, .tts-voice-select {
   padding: 3px 6px; border-radius: 10px;
   font-family: inherit; font-size: 11px; font-weight: 600;
   background: var(--bg); color: var(--text2);
   outline: none; cursor: pointer;
   border: 1px solid var(--border) !important;
+  max-width: 120px;
+}
+.tts-voice-select {
+  max-width: 100px;
 }
 
 /* 正文区 */
