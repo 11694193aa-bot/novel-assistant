@@ -48,6 +48,21 @@ export async function flushCloudSync(stamped) {
 
 // ========== 核心存储（IndexedDB为主，localStorage降级） ==========
 
+// [SPLIT] 从 IndexedDB 还原 readingBooks 的 content 字段
+async function restoreContents(data) {
+  if (!data?.readingBooks?.length) return data;
+  const restored = await Promise.all(
+    data.readingBooks.map(async (b) => {
+      if (b.content !== '__content_ref__') return b;
+      try {
+        const content = await idbGet(`novel_content_${b.id}`);
+        return content ? { ...b, content } : b;
+      } catch (_) { return b; }
+    })
+  );
+  return { ...data, readingBooks: restored };
+}
+
 export async function saveData(key, data) {
   // [FIX] 写入前校验，空数据不写 IndexedDB 也不推云端
   const hasData =
@@ -58,21 +73,50 @@ export async function saveData(key, data) {
     console.warn('[saveData] 数据为空，跳过本次写入');
     return;
   }
-  // 加时间戳
-  const stamped = { ...data, _updatedAt: Date.now() };
-  // 写入 IndexedDB（立即写，本地速度快）
+
+  // [SPLIT] 把 readingBooks 的 content 单独存 IndexedDB，主数据用占位符
+  const contentMap = {};
+  const readingBooksStripped = (data.readingBooks || []).map(b => {
+    if (b.content && b.content.length > 100) {
+      contentMap[b.id] = b.content;
+      return { ...b, content: '__content_ref__' };
+    }
+    return b;
+  });
+
+  await Promise.all(
+    Object.entries(contentMap).map(([bookId, content]) =>
+      idbSet(`novel_content_${bookId}`, content).catch(e =>
+        console.error('content写入失败', bookId, ':', e.message)
+      )
+    )
+  );
+
+  // 清理孤儿 content（不在当前 readingBooks 里的）
+  const currentIds = new Set((data.readingBooks || []).map(b => b.id));
+  try {
+    const allContentKeys = await idbKeys('novel_content_');
+    await Promise.all(
+      allContentKeys
+        .filter(k => !currentIds.has(k.replace('novel_content_', '')))
+        .map(k => idbDelete(k).catch(() => {}))
+    );
+  } catch (_) {}
+
+  // 主数据不含 content，体积大幅减小
+  const strippedData = { ...data, readingBooks: readingBooksStripped };
+  const stamped = { ...strippedData, _updatedAt: Date.now() };
+
   try {
     await idbSet(`novel_${key}`, stamped);
   } catch (e) {
     console.error('IndexedDB 写入失败:', e.message);
   }
-  // 本地历史版本（不等云同步）
   try {
     await saveHistory(key, stamped, stamped._updatedAt);
   } catch (e) {
     console.error('本地历史写入失败:', e.message);
   }
-  // 云同步：防抖，避免高频请求风暴
   scheduleCloudSync(stamped);
 }
 
@@ -93,21 +137,23 @@ export async function loadData(key) {
     console.error('云端读取失败:', e.message);
   }
 
-  // 3. 时间戳冲突解决：谁新谁赢（删改后的数据不会被旧数据覆盖）
+  // 3. 时间戳冲突解决：谁新谁赢
   const localTs = localData?._updatedAt || 0;
   const cloudTs = cloudData?._updatedAt || 0;
 
   if (!localData || localTs === 0) {
     if (cloudData && cloudTs > 0) {
       try { await idbSet(`novel_${key}`, cloudData); } catch (_) {}
-      return cloudData;
+      // [SPLIT] 还原 content
+      return restoreContents(cloudData);
     }
-    return localData || cloudData || null;
+    return localData ? restoreContents(localData) : (cloudData ? restoreContents(cloudData) : null);
   }
 
   if (cloudTs > localTs) {
     try { await idbSet(`novel_${key}`, cloudData); } catch (_) {}
-    return { ...cloudData, _source: 'cloud' }; // 标记数据来源，用于提示用户
+    // [SPLIT] 还原 content
+    return restoreContents({ ...cloudData, _source: 'cloud' });
   }
 
   // [FIX] 本地推送云端前做空数据保护，防止本地空数据覆盖云端
@@ -123,7 +169,8 @@ export async function loadData(key) {
     }
   }
 
-  return localData;
+  // [SPLIT] 还原 content
+  return restoreContents(localData);
 }
 
 // ========== 历史版本（IndexedDB） ==========
