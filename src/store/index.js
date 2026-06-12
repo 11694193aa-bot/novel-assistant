@@ -36,6 +36,7 @@ const useStore = create((set, get) => ({
   readingBooks: [],
   dirty: false,
   initialized: false,
+  loadFailed: false,    // 数据加载失败标记——禁止自动保存
   toast: null,          // { text: string, ts: number }  — 全局提示弹窗
 
   // ============ 初始化 ============
@@ -57,12 +58,15 @@ const useStore = create((set, get) => ({
         toast: fromCloud ? { text: '已从云端同步数据', ts: Date.now() } : null,
       });
     } else {
-      set({ initialized: true, settings: { ...defaultSettings, splashImage } });
+      // 加载失败：标记初始化完成让 UI 渲染，但禁止自动保存
+      set({ initialized: true, loadFailed: true, settings: { ...defaultSettings, splashImage } });
     }
   },
 
   // ============ 持久化 ============
   persist: async (silent = false) => {
+    const { loadFailed } = get();
+    if (loadFailed) return; // 数据加载失败，禁止保存防止覆盖云端
     if (!silent) set({ toast: { text: '正在保存...', ts: Date.now() } });
     const { books, inspirationCards, aiConversations, settings, dailyCounts, trash, readingBooks } = get();
     const { splashImage, ...settingsWithoutSplash } = settings;
